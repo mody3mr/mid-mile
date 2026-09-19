@@ -5,13 +5,11 @@ import {
     doc,
     getFirestore,
     getDoc,
+    deleteDoc,
     onSnapshot,
     serverTimestamp,
     setDoc,
-    updateDoc,
-    writeBatch,
-    query,
-    where
+    updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -26,27 +24,25 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+// مراجع قواعد البيانات
 const usersRef = collection(db, "users");
 const ordersRef = collection(db, "orders");
+const teamsRef = collection(db, "teams");
+const trucksRef = collection(db, "trucks");
 const systemRef = doc(db, "system", "controls");
 const notificationsRef = collection(db, "notifications");
 
 let allOrders = [];
-let allUsers = [];
-let barcodeToProductMap = new Map(); // خريطة لتخزين الباركود واسم المنتج المقابل للبحث السريع
+let barcodeToProductMap = new Map(); 
 
+// --------------------------------------------------
 // دوال مساعدة
-function getElement(id) {
-    return document.getElementById(id);
-}
+// --------------------------------------------------
+function getElement(id) { return document.getElementById(id); }
 
 function escapeHtml(value) {
-    return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function showToast(message, type = "error") {
@@ -64,14 +60,13 @@ function showToast(message, type = "error") {
         toast.classList.add("bg-red-900", "border", "border-red-500", "text-white");
         icon.className = "fas fa-exclamation-circle text-red-400 text-lg";
     }
-
     toast.classList.remove("opacity-0", "-translate-y-4");
     toast.classList.add("opacity-100", "translate-y-0");
     clearTimeout(showToast.timeout);
     showToast.timeout = setTimeout(() => {
         toast.classList.remove("opacity-100", "translate-y-0");
         toast.classList.add("opacity-0", "-translate-y-4");
-    }, 3200);
+    }, 3000);
 }
 
 function setBusy(button, busy, label = "جاري التنفيذ...") {
@@ -99,16 +94,150 @@ function formatDate(value) {
 }
 
 // --------------------------------------------------
-// 1. إدارة الموظفين (المناديب)
+// 1. إدارة الفرق (Teams)
 // --------------------------------------------------
+getElement("teamForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nameInput = getElement("newTeamName");
+    const name = nameInput.value.trim();
+    if (!name) return showToast("برجاء إدخال اسم التيم");
+    
+    const btn = e.target.querySelector('button');
+    setBusy(btn, true, "إضافة...");
+    try {
+        await addDoc(teamsRef, { name, createdAt: serverTimestamp() });
+        nameInput.value = "";
+        showToast("تم إضافة التيم بنجاح", "success");
+    } catch (error) {
+        showToast("تعذر إضافة التيم");
+    } finally { setBusy(btn, false); }
+});
 
-function renderEmployees(snapshot) {
-    const tbody = getElement("employeesTableBody");
-    const dataList = getElement("repsDataList");
+onSnapshot(teamsRef, (snapshot) => {
+    const tbody = getElement("teamsTableBody");
+    const empTeamSelect = getElement("newEmpTeam");
+    const notifTeamSelect = getElement("targetTeamValue");
     
     if (tbody) tbody.innerHTML = "";
-    if (dataList) dataList.innerHTML = "";
-    allUsers = [];
+    let optionsHtml = '<option value="">اختر التيم...</option>';
+
+    if (snapshot.empty) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500">لا يوجد فرق مسجلة.</td></tr>';
+    } else {
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const teamName = escapeHtml(data.name);
+            optionsHtml += `<option value="${teamName}">${teamName}</option>`;
+            
+            if (tbody) {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-gray-700/50 transition";
+                tr.innerHTML = `
+                    <td class="p-4">${teamName}</td>
+                    <td class="p-4 text-xs text-gray-400">${formatDate(data.createdAt)}</td>
+                    <td class="p-4 text-center">
+                        <button type="button" onclick="deleteTeam('${docSnap.id}', '${teamName}')" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-2 py-1 rounded border border-red-800 transition"><i class="fas fa-trash"></i> حذف</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        });
+    }
+    if(empTeamSelect) empTeamSelect.innerHTML = optionsHtml;
+    if(notifTeamSelect) notifTeamSelect.innerHTML = optionsHtml;
+});
+
+window.deleteTeam = function(id, name) {
+    window.UI.openModal(
+        "تأكيد الحذف",
+        `هل أنت متأكد من حذف التيم: <span class="font-bold text-red-400">${name}</span>؟`,
+        "حذف التيم",
+        "bg-red-600 hover:bg-red-700",
+        async () => {
+            try {
+                await deleteDoc(doc(db, "teams", id));
+                showToast("تم حذف التيم", "success");
+            } catch (e) { showToast("تعذر حذف التيم"); }
+        }
+    );
+};
+
+// --------------------------------------------------
+// 2. إدارة الشاحنات (Cars)
+// --------------------------------------------------
+getElement("truckForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nameInput = getElement("newTruckName");
+    const name = nameInput.value.trim();
+    if (!name) return showToast("برجاء إدخال بيانات العربية");
+    
+    const btn = e.target.querySelector('button');
+    setBusy(btn, true, "إضافة...");
+    try {
+        await addDoc(trucksRef, { name, createdAt: serverTimestamp() });
+        nameInput.value = "";
+        showToast("تم إضافة العربية بنجاح", "success");
+    } catch (error) {
+        showToast("تعذر إضافة العربية");
+    } finally { setBusy(btn, false); }
+});
+
+onSnapshot(trucksRef, (snapshot) => {
+    const tbody = getElement("trucksTableBody");
+    const notifCarSelect = getElement("targetCarValue");
+    
+    if (tbody) tbody.innerHTML = "";
+    let optionsHtml = '<option value="">اختر العربية...</option>';
+
+    if (snapshot.empty) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500">لا توجد شاحنات مسجلة.</td></tr>';
+    } else {
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const truckName = escapeHtml(data.name);
+            optionsHtml += `<option value="${truckName}">${truckName}</option>`;
+            
+            if (tbody) {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-gray-700/50 transition";
+                tr.innerHTML = `
+                    <td class="p-4">${truckName}</td>
+                    <td class="p-4 text-xs text-gray-400">${formatDate(data.createdAt)}</td>
+                    <td class="p-4 text-center">
+                        <button type="button" onclick="deleteTruck('${docSnap.id}', '${truckName}')" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-2 py-1 rounded border border-red-800 transition"><i class="fas fa-trash"></i> حذف</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        });
+    }
+    if(notifCarSelect) notifCarSelect.innerHTML = optionsHtml;
+});
+
+window.deleteTruck = function(id, name) {
+    window.UI.openModal(
+        "تأكيد الحذف",
+        `هل أنت متأكد من حذف العربية: <span class="font-bold text-red-400">${name}</span>؟`,
+        "حذف العربية",
+        "bg-red-600 hover:bg-red-700",
+        async () => {
+            try {
+                await deleteDoc(doc(db, "trucks", id));
+                showToast("تم حذف العربية", "success");
+            } catch (e) { showToast("تعذر حذف العربية"); }
+        }
+    );
+};
+
+// --------------------------------------------------
+// 3. إدارة المناديب
+// --------------------------------------------------
+onSnapshot(usersRef, (snapshot) => {
+    const tbody = getElement("employeesTableBody");
+    const repsDataList = getElement("repsDataList"); // الـ Datalist الخاصة بالبحث
+    
+    if (tbody) tbody.innerHTML = "";
+    if (repsDataList) repsDataList.innerHTML = "";
 
     if (snapshot.empty) {
         if(tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">لا يوجد مناديب مسجلين.</td></tr>';
@@ -122,148 +251,134 @@ function renderEmployees(snapshot) {
     snapshot.forEach((docSnap) => {
         const user = docSnap.data();
         const hrid = docSnap.id;
-        allUsers.push({ id: hrid, ...user });
         totalReps++;
 
-        // تحديث قائمة البحث المنسدلة للأوردرات
-        if (dataList) {
+        // تحديث البحث الذكي للمناديب
+        if (repsDataList) {
             const option = document.createElement('option');
             option.value = hrid;
             option.text = user.name || "بدون اسم";
-            dataList.appendChild(option);
+            repsDataList.appendChild(option);
         }
 
         if (!tbody) return;
-        
         const tr = document.createElement("tr");
         tr.className = "hover:bg-gray-700/50 transition";
         const isSuspended = user.status === 'suspended';
-        const creationDate = formatDate(user.createdAt) || 'غير متوفر';
 
         tr.innerHTML = `
-            <td class="p-4">${escapeHtml(user.name || "---")}</td>
+            <td class="p-4">${escapeHtml(user.name)}</td>
             <td class="p-4 font-bold text-blue-400" dir="ltr">${escapeHtml(hrid)}</td>
-            <td class="p-4" dir="ltr">${escapeHtml(user.mobile || "---")}</td>
-            <td class="p-4">${escapeHtml(user.team || "---")}</td>
-            <td class="p-4 text-xs text-gray-400">${escapeHtml(creationDate)}</td>
+            <td class="p-4" dir="ltr">${escapeHtml(user.mobile)}</td>
+            <td class="p-4 text-blue-300 font-bold">${escapeHtml(user.team)}</td>
+            <td class="p-4 text-xs text-gray-400">${formatDate(user.createdAt) || 'غير متوفر'}</td>
             <td class="p-4 tracking-widest text-center" dir="ltr">${user.pinCode ? escapeHtml(user.pinCode) : '<span class="text-gray-500 text-xs">لم يتم</span>'}</td>
             <td class="p-4">
                 <div class="flex items-center justify-center gap-2">
-                    <button type="button" data-reset-pin="${escapeHtml(hrid)}" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-2 py-1 rounded border border-red-800 transition" title="تصفير الـ PIN"><i class="fas fa-key"></i></button>
-                    <button type="button" data-edit-emp="${escapeHtml(hrid)}" class="text-xs bg-blue-900/50 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded border border-blue-800 transition" title="تعديل البيانات"><i class="fas fa-edit"></i></button>
-                    <button type="button" data-toggle-status="${escapeHtml(hrid)}" data-current-status="${escapeHtml(user.status || 'active')}" class="text-xs ${isSuspended ? 'bg-green-900/50 text-green-400 border-green-800 hover:bg-green-600' : 'bg-orange-900/50 text-orange-400 border-orange-800 hover:bg-orange-600'} hover:text-white px-2 py-1 rounded border transition" title="${isSuspended ? 'تفعيل المندوب' : 'تعطيل المندوب'}">
+                    <button type="button" onclick="resetPin('${hrid}')" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-2 py-1 rounded border border-red-800 transition" title="تصفير الـ PIN"><i class="fas fa-key"></i></button>
+                    <button type="button" onclick="openEditEmployeeModal('${hrid}', '${escapeHtml(user.name)}', '${escapeHtml(user.mobile)}', '${escapeHtml(user.team)}')" class="text-xs bg-blue-900/50 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded border border-blue-800 transition" title="تعديل البيانات"><i class="fas fa-edit"></i></button>
+                    <button type="button" onclick="toggleEmployeeStatus('${hrid}', '${user.status || 'active'}')" class="text-xs ${isSuspended ? 'bg-green-900/50 text-green-400 border-green-800 hover:bg-green-600' : 'bg-orange-900/50 text-orange-400 border-orange-800 hover:bg-orange-600'} hover:text-white px-2 py-1 rounded border transition" title="${isSuspended ? 'تفعيل المندوب' : 'تعطيل المندوب'}">
                         <i class="fas ${isSuspended ? 'fa-user-check' : 'fa-user-slash'}"></i>
                     </button>
                 </div>
             </td>
         `;
-
-        tr.querySelector("[data-reset-pin]").addEventListener("click", () => resetPin(hrid));
-        tr.querySelector("[data-edit-emp]").addEventListener("click", () => editEmployee(hrid, user.name, user.mobile, user.team));
-        tr.querySelector("[data-toggle-status]").addEventListener("click", (e) => toggleEmployeeStatus(hrid, e.currentTarget.dataset.currentStatus));
         rows.push(tr);
     });
 
     if(tbody) rows.forEach((row) => tbody.appendChild(row));
-    const statsEl = getElement("stat-total-reps");
-    if(statsEl) statsEl.textContent = totalReps;
-}
-
-onSnapshot(usersRef, renderEmployees, (error) => {
-    console.error(error);
-    const tbody = getElement("employeesTableBody");
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-red-400">تعذر تحميل المناديب. تحقق من الاتصال.</td></tr>';
+    if(getElement("stat-total-reps")) getElement("stat-total-reps").textContent = totalReps;
 });
 
-async function addEmployee() {
-    const nameInput = getElement("newEmpName");
-    const hridInput = getElement("newEmpHrid");
-    const mobileInput = getElement("newEmpMobile");
-    const teamInput = getElement("newEmpTeam");
-
-    const name = nameInput?.value.trim();
-    const hrid = hridInput?.value.trim();
-    const mobile = mobileInput?.value.trim();
-    const team = teamInput?.value.trim();
+getElement("employeeForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = getElement("newEmpName").value.trim();
+    const hrid = getElement("newEmpHrid").value.trim();
+    const mobile = getElement("newEmpMobile").value.trim();
+    const team = getElement("newEmpTeam").value; // من الدروب داون
 
     if (!name || !hrid || !mobile || !team) return showToast("برجاء ملء جميع بيانات المندوب");
     if (/\s/.test(hrid)) return showToast("الـ HRID لا يجب أن يحتوي على مسافات");
 
-    const button = getElement("employeeForm")?.querySelector('button[type="submit"]');
-    setBusy(button, true, "جاري الحفظ...");
+    const btn = e.target.querySelector('button');
+    setBusy(btn, true, "جاري الحفظ...");
     try {
         const existing = await getDoc(doc(db, "users", hrid));
-        if (existing.exists()) {
-            showToast("هذا الـ HRID موجود بالفعل");
-            return;
-        }
+        if (existing.exists()) return showToast("هذا الـ HRID موجود بالفعل");
+        
         await setDoc(doc(db, "users", hrid), {
-            name, mobile, team,
-            status: "active",
-            pinCode: null,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
+            name, mobile, team, status: "active", pinCode: null,
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
-        nameInput.value = ""; hridInput.value = ""; mobileInput.value = ""; teamInput.value = "";
+        
+        getElement("employeeForm").reset();
         getElement("employeeFormPanel")?.classList.add("hidden");
         showToast("تم إضافة المندوب بنجاح", "success");
-    } catch (error) {
-        showToast("تعذر إضافة المندوب.");
-    } finally {
-        setBusy(button, false);
-    }
-}
+    } catch (error) { showToast("تعذر إضافة المندوب."); } 
+    finally { setBusy(btn, false); }
+});
 
-async function editEmployee(hrid, currentName, currentMobile, currentTeam) {
-    const newName = prompt("تعديل اسم المندوب:", currentName || "");
-    if (newName === null) return;
-    const newMobile = prompt("تعديل رقم الموبايل:", currentMobile || "");
-    if (newMobile === null) return;
-    const newTeam = prompt("تعديل التيم:", currentTeam || "");
-    if (newTeam === null) return;
+window.openEditEmployeeModal = function(hrid, name, mobile, team) {
+    const html = `
+        <div class="space-y-3">
+            <input type="text" id="editModalName" value="${name}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="اسم المندوب">
+            <input type="text" id="editModalMobile" value="${mobile}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="رقم الموبايل">
+            <p class="text-xs text-gray-400 mt-2">التيم الحالي: ${team} (للتعديل اكتب اسم التيم الجديد)</p>
+            <input type="text" id="editModalTeam" value="${team}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="التيم">
+        </div>
+    `;
+    window.UI.openModal("تعديل بيانات المندوب", html, "حفظ التعديلات", "bg-blue-600 hover:bg-blue-700", async () => {
+        const nName = getElement("editModalName").value.trim();
+        const nMobile = getElement("editModalMobile").value.trim();
+        const nTeam = getElement("editModalTeam").value.trim();
+        try {
+            await updateDoc(doc(db, "users", hrid), { name: nName, mobile: nMobile, team: nTeam, updatedAt: serverTimestamp() });
+            showToast("تم تعديل البيانات بنجاح", "success");
+        } catch(e) { showToast("تعذر التعديل"); }
+    });
+};
 
-    try {
-        await updateDoc(doc(db, "users", hrid), {
-            name: newName.trim(), mobile: newMobile.trim(), team: newTeam.trim(), updatedAt: serverTimestamp()
-        });
-        showToast("تم تعديل البيانات بنجاح", "success");
-    } catch (error) {
-        showToast("تعذر تعديل البيانات");
-    }
-}
-
-async function toggleEmployeeStatus(hrid, currentStatus) {
+window.toggleEmployeeStatus = function(hrid, currentStatus) {
     const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
     const actionText = newStatus === 'suspended' ? 'تعطيل' : 'تفعيل';
-    if (!window.confirm(`هل أنت متأكد من ${actionText} المندوب ${hrid}؟`)) return;
+    const color = newStatus === 'suspended' ? 'bg-orange-600' : 'bg-green-600';
     
-    try {
-        await updateDoc(doc(db, "users", hrid), { status: newStatus, updatedAt: serverTimestamp() });
-        showToast(`تم ${actionText} المندوب بنجاح`, "success");
-    } catch (error) {
-        showToast(`تعذر ${actionText} المندوب`);
-    }
-}
+    window.UI.openModal(
+        `تأكيد ${actionText} المندوب`,
+        `هل أنت متأكد من ${actionText} حساب المندوب صاحب المعرف: <span class="font-bold">${hrid}</span>؟`,
+        actionText,
+        color,
+        async () => {
+            try {
+                await updateDoc(doc(db, "users", hrid), { status: newStatus, updatedAt: serverTimestamp() });
+                showToast(`تم ${actionText} المندوب بنجاح`, "success");
+            } catch (e) { showToast(`تعذر ${actionText} المندوب`); }
+        }
+    );
+};
 
-async function resetPin(hrid) {
-    if (!window.confirm(`هل أنت متأكد من تصفير الـ PIN للمندوب ${hrid}؟`)) return;
-    try {
-        await updateDoc(doc(db, "users", hrid), { pinCode: null, updatedAt: serverTimestamp() });
-        showToast("تم تصفير الرقم السري", "success");
-    } catch (error) {
-        showToast("تعذر تصفير الرقم السري");
-    }
-}
+window.resetPin = function(hrid) {
+    window.UI.openModal(
+        "تأكيد تصفير الـ PIN",
+        `هل أنت متأكد من مسح الرقم السري (PIN) للمندوب صاحب المعرف: <span class="font-bold text-blue-400">${hrid}</span>؟ (سيُطلب منه إنشاء رقم جديد عند الدخول).`,
+        "تصفير الرقم",
+        "bg-red-600 hover:bg-red-700",
+        async () => {
+            try {
+                await updateDoc(doc(db, "users", hrid), { pinCode: null, updatedAt: serverTimestamp() });
+                showToast("تم تصفير الرقم السري", "success");
+            } catch (e) { showToast("تعذر التصفير"); }
+        }
+    );
+};
 
 
 // --------------------------------------------------
-// 2. إدارة الأوردرات (المنتجات)
+// 4. إدارة الأوردرات
 // --------------------------------------------------
-
-function normalizeStatus(status) {
-    const value = String(status || "Draft").trim().toLowerCase();
-    const aliases = { draft: "Draft", ready: "Ready", done: "Done", delivered: "Done", rejected: "Rejected" };
-    return aliases[value] || "Draft";
+function statusClasses(status) {
+    const classes = { Draft: "bg-gray-700 text-gray-300", Ready: "bg-blue-900/30 text-blue-400 border-blue-700", Done: "bg-green-900/30 text-green-400 border-green-700", Rejected: "bg-red-900/30 text-red-400 border-red-700" };
+    return classes[status] || classes.Draft;
 }
 
 function statusLabel(status) {
@@ -271,15 +386,16 @@ function statusLabel(status) {
     return labels[status] || status;
 }
 
-function statusClasses(status) {
-    const classes = {
-        Draft: "bg-gray-700 text-gray-300 border-gray-600",
-        Ready: "bg-blue-900/30 text-blue-400 border-blue-700/50",
-        Done: "bg-green-900/30 text-green-400 border-green-700/50",
-        Rejected: "bg-red-900/30 text-red-400 border-red-700/50"
-    };
-    return classes[status] || classes.Draft;
-}
+onSnapshot(ordersRef, (snapshot) => {
+    allOrders = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        if(data.barcode && data.productName) barcodeToProductMap.set(data.barcode.trim(), data.productName);
+        return { id: docSnap.id, ...data };
+    });
+    
+    allOrders.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+    renderOrders();
+});
 
 function renderOrders() {
     const container = getElement("adminOrdersContainer");
@@ -288,17 +404,15 @@ function renderOrders() {
     const search = getElement("adminOrderSearch")?.value.trim().toLowerCase() || "";
     const filter = getElement("adminOrderFilter")?.value || "all";
     
-    let readyCount = 0;
-    let doneTodayCount = 0;
+    let readyCount = 0, doneTodayCount = 0;
     const today = new Date().toDateString();
 
     const filtered = allOrders.filter((order) => {
-        const status = normalizeStatus(order.status);
+        const status = order.status || "Draft";
         const product = String(order.productName || "").toLowerCase();
         const barcode = String(order.barcode || "").toLowerCase();
         const hrid = String(order.hrid || "").toLowerCase();
         
-        // حساب الإحصائيات
         if (status === 'Ready') readyCount++;
         if (status === 'Done') {
             const orderDate = order.updatedAt?.toDate ? order.updatedAt.toDate().toDateString() : null;
@@ -310,7 +424,6 @@ function renderOrders() {
         return matchSearch && matchFilter;
     });
 
-    // تحديث أرقام الإحصائيات
     if(getElement("stat-ready-orders")) getElement("stat-ready-orders").textContent = readyCount;
     if(getElement("stat-done-orders")) getElement("stat-done-orders").textContent = doneTodayCount;
 
@@ -321,7 +434,7 @@ function renderOrders() {
     }
 
     filtered.forEach((order) => {
-        const status = normalizeStatus(order.status);
+        const status = order.status || "Draft";
         const div = document.createElement("div");
         div.className = "bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition hover:bg-gray-700/50";
         div.innerHTML = `
@@ -333,40 +446,20 @@ function renderOrders() {
                     <span dir="ltr"><i class="fas fa-barcode ml-1 text-gray-500"></i> ${escapeHtml(order.barcode)}</span>
                     ${order.notes ? `<span class="text-yellow-500"><i class="fas fa-sticky-note ml-1"></i>${escapeHtml(order.notes)}</span>` : ''}
                 </div>
-                <div class="text-xs text-gray-500 mt-2">${formatDate(order.createdAt)}</div>
             </div>
             <div class="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
                 <span class="text-xs px-3 py-1.5 rounded border ${statusClasses(status)} font-bold w-full md:w-auto text-center">${statusLabel(status)}</span>
-                <select data-order-status="${escapeHtml(order.id)}" class="w-full md:w-auto bg-gray-900 border border-gray-600 text-white text-sm rounded-lg p-2 focus:ring-blue-500 outline-none">
-                    ${["Draft", "Ready", "Done", "Rejected"].map((value) => `<option value="${value}" ${status === value ? "selected" : ""}>${statusLabel(value)}</option>`).join("")}
+                <select data-order-status="${escapeHtml(order.id)}" class="w-full md:w-auto bg-gray-900 border border-gray-600 text-white text-sm rounded-lg p-2 outline-none focus:border-blue-500">
+                    ${["Draft", "Ready", "Done", "Rejected"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${statusLabel(v)}</option>`).join("")}
                 </select>
             </div>
         `;
-        div.querySelector("[data-order-status]").addEventListener("change", (event) => updateOrderStatus(order.id, event.target.value));
+        div.querySelector("[data-order-status]").addEventListener("change", (e) => updateOrderStatus(order.id, e.target.value));
         container.appendChild(div);
     });
 }
 
-onSnapshot(ordersRef, (snapshot) => {
-    allOrders = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        // تحديث خريطة الباركود علشان ميزة الإكمال التلقائي
-        if(data.barcode && data.productName) {
-            barcodeToProductMap.set(data.barcode.trim(), data.productName);
-        }
-        return { id: docSnap.id, ...data };
-    });
-    
-    allOrders.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || a.createdAt || 0;
-        const bTime = b.createdAt?.toMillis?.() || b.createdAt || 0;
-        return bTime - aTime;
-    });
-    
-    renderOrders();
-});
-
-// ميزة الإكمال التلقائي لاسم المنتج بناءً على الباركود
+// ميزة الإكمال التلقائي للباركود
 const barcodeInput = getElement("newOrderBarcode");
 const productInput = getElement("newOrderProduct");
 if (barcodeInput && productInput) {
@@ -374,141 +467,97 @@ if (barcodeInput && productInput) {
         const code = e.target.value.trim();
         if (barcodeToProductMap.has(code)) {
             productInput.value = barcodeToProductMap.get(code);
-            productInput.classList.remove("text-gray-300");
-            productInput.classList.add("text-white", "border-blue-500");
+            productInput.classList.replace("text-gray-300", "text-white");
         } else {
-            productInput.value = ""; // أو ممكن نخليه يكتبه يدوي بس بناءً على طلبك الباركود هو اللي بيجيب الاسم
-            productInput.classList.add("text-gray-300");
-            productInput.classList.remove("text-white", "border-blue-500");
+            productInput.value = "";
+            productInput.classList.replace("text-white", "text-gray-300");
         }
     });
 }
 
-async function createDraftOrder() {
-    const barcode = barcodeInput?.value.trim();
-    // لو المنتج ملوش اسم متسجل قبل كده، هنسمح للأدمن يكتبه أو ياخد اسم افتراضي مؤقتاً
-    let product = productInput?.value.trim(); 
-    if(!product && barcodeToProductMap.has(barcode)) product = barcodeToProductMap.get(barcode);
-    if(!product) {
-        product = prompt("المنتج غير مسجل مسبقاً، برجاء كتابة اسم المنتج ليتم حفظه:");
-        if(!product) return showToast("يجب إدخال اسم المنتج");
-    }
+async function saveDraftOrder(barcode, productName, hrid, notes) {
+    try {
+        await addDoc(ordersRef, { productName, barcode, hrid, notes: notes || "", status: "Draft", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        barcodeInput.value = ""; productInput.value = ""; getElement("newOrderHrid").value = ""; getElement("newOrderNotes").value = "";
+        showToast("تم إنشاء الأوردر كمسودة بنجاح", "success");
+    } catch (e) { showToast("تعذر إنشاء الأوردر"); }
+}
 
-    const hrid = getElement("newOrderHrid")?.value.trim();
-    const notes = getElement("newOrderNotes")?.value.trim();
+getElement("orderForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const barcode = barcodeInput.value.trim();
+    let product = productInput.value.trim();
+    const hrid = getElement("newOrderHrid").value.trim();
+    const notes = getElement("newOrderNotes").value.trim();
 
     if (!barcode || !hrid) return showToast("الباركود والـ HRID مطلوبين");
 
-    const button = getElement("orderForm")?.querySelector('button[type="submit"]');
-    setBusy(button, true, "جاري الإنشاء...");
+    if (!product && barcodeToProductMap.has(barcode)) product = barcodeToProductMap.get(barcode);
     
-    try {
-        await addDoc(ordersRef, { 
-            productName: product, 
-            barcode, 
-            hrid, 
-            notes: notes || "",
-            status: "Draft", // مسودة للادارة فقط
-            createdAt: serverTimestamp(), 
-            updatedAt: serverTimestamp() 
+    // استخدام المودال في حالة إن المنتج جديد ومش متسجل
+    if (!product) {
+        const html = `
+            <p class="mb-3 text-sm text-gray-300">هذا الباركود غير مسجل مسبقاً، برجاء كتابة اسم المنتج ليتم حفظه في النظام:</p>
+            <input type="text" id="modalProductName" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="اسم المنتج هنا...">
+        `;
+        window.UI.openModal("منتج جديد", html, "حفظ الأوردر", "bg-green-600 hover:bg-green-700", async () => {
+            const modalProd = getElement("modalProductName").value.trim();
+            if(!modalProd) return showToast("يجب إدخال اسم المنتج");
+            await saveDraftOrder(barcode, modalProd, hrid, notes);
         });
-        
-        barcodeInput.value = "";
-        productInput.value = "";
-        getElement("newOrderHrid").value = "";
-        getElement("newOrderNotes").value = "";
-        showToast("تم إنشاء الأوردر كمسودة بنجاح", "success");
-    } catch (error) {
-        showToast("تعذر إنشاء الأوردر");
-    } finally {
-        setBusy(button, false);
+    } else {
+        saveDraftOrder(barcode, product, hrid, notes);
     }
-}
+});
 
 async function updateOrderStatus(orderId, newStatus) {
     try {
-        await updateDoc(doc(db, "orders", orderId), { 
-            status: normalizeStatus(newStatus), 
-            updatedAt: serverTimestamp() 
-        });
-        showToast("تم تحديث حالة الأوردر", "success");
-    } catch (error) {
-        showToast("تعذر تحديث حالة الأوردر");
-    }
+        await updateDoc(doc(db, "orders", orderId), { status: newStatus, updatedAt: serverTimestamp() });
+        showToast("تم التحديث", "success");
+    } catch (error) { showToast("تعذر التحديث"); }
 }
 
-
 // --------------------------------------------------
-// 3. الإشعارات والتحكم
+// 5. الإشعارات والتحكم
 // --------------------------------------------------
-
-async function sendNotification() {
+window.sendNotification = async function() {
     const type = getElement("notificationTargetType").value;
-    const targetValue = getElement("notificationTargetValue").value.trim();
+    let targetValue = "";
+    
+    if (type === 'rep') targetValue = getElement("targetRepValue").value.trim();
+    else if (type === 'team') targetValue = getElement("targetTeamValue").value;
+    else if (type === 'car') targetValue = getElement("targetCarValue").value;
+
     const text = getElement("globalNotificationText").value.trim();
 
     if (!text) return showToast("اكتب نص الإشعار أولاً");
-    if (type !== 'all' && !targetValue) return showToast("برجاء تحديد المستهدف (الـ HRID أو التيم أو العربية)");
+    if (type !== 'all' && !targetValue) return showToast("برجاء تحديد المستهدف من القائمة");
 
     const button = document.querySelector('[onclick="sendNotification()"]');
-    setBusy(button, true, "جاري الإرسال...");
+    setBusy(button, true, "إرسال...");
 
     try {
-        // بناء كائن الإشعار
-        const notificationData = {
-            message: text,
-            type: type, // 'all', 'rep', 'team', 'car'
-            target: targetValue, // فارغ لو 'all'
-            timestamp: serverTimestamp(),
-            readBy: []
-        };
-
-        await addDoc(notificationsRef, notificationData);
-
-        // لو كان إشعار عام للكل (للتوافق مع الكود القديم لو المناديب بتسمع من systemRef)
-        if(type === 'all') {
+        await addDoc(notificationsRef, { message: text, type, target: targetValue, timestamp: serverTimestamp(), readBy: [] });
+        if(type === 'all') { // توافق مع الأجهزة القديمة
             await setDoc(systemRef, { globalMessage: text, messageTime: Date.now() }, { merge: true });
         }
-
         getElement("globalNotificationText").value = "";
-        getElement("notificationTargetValue").value = "";
         showToast("تم إرسال الإشعار بنجاح", "success");
-    } catch (error) {
-        showToast("تعذر إرسال الإشعار");
-    } finally {
-        setBusy(button, false);
-    }
-}
+    } catch (e) { showToast("تعذر الإرسال"); } 
+    finally { setBusy(button, false); }
+};
 
-async function forceLogoutAll() {
-    if (!window.confirm("تحذير: سيتم إخراج جميع المناديب من النظام فوراً! هل أنت متأكد؟")) return;
-    const button = document.querySelector('[onclick="forceLogoutAll()"]');
-    setBusy(button, true, "جاري التنفيذ...");
+window.forceLogoutAll = async function() {
     try {
         await setDoc(systemRef, { forceLogoutTrigger: Date.now() }, { merge: true });
-        showToast("تم إرسال أمر تسجيل الخروج لجميع الأجهزة", "success");
-    } catch (error) {
-        showToast("تعذر إرسال الأمر");
-    } finally {
-        setBusy(button, false);
-    }
-}
+        showToast("تم إرسال أمر تسجيل الخروج بنجاح", "success");
+    } catch (error) { showToast("تعذر إرسال الأمر"); }
+};
 
-// --------------------------------------------------
-// ربط الأحداث (Event Listeners)
-// --------------------------------------------------
-getElement("toggleEmployeeFormBtn")?.addEventListener("click", () => getElement("employeeFormPanel")?.classList.toggle("hidden"));
-getElement("employeeForm")?.addEventListener("submit", (event) => { event.preventDefault(); addEmployee(); });
-getElement("orderForm")?.addEventListener("submit", (event) => { event.preventDefault(); createDraftOrder(); });
+// فلاتر الأوردرات
 getElement("adminOrderSearch")?.addEventListener("input", renderOrders);
 getElement("adminOrderFilter")?.addEventListener("change", renderOrders);
+getElement("toggleEmployeeFormBtn")?.addEventListener("click", () => getElement("employeeFormPanel")?.classList.toggle("hidden"));
 
-// تصدير الدوال للـ Window لتعمل مع HTML onclick
-window.addEmployee = addEmployee;
-window.resetPin = resetPin;
-window.createDraftOrder = createDraftOrder;
+// جعل الدوال متاحة للـ HTML
 window.updateOrderStatus = updateOrderStatus;
-window.sendNotification = sendNotification;
-window.forceLogoutAll = forceLogoutAll;
-window.editEmployee = editEmployee;
-window.toggleEmployeeStatus = toggleEmployeeStatus;
