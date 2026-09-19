@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة الإدارة - نظام المناديب</title>
     
+    <!-- ربط ملف الـ Manifest -->
     <link rel="manifest" href="../manifest.json">
     <meta name="theme-color" content="#111827">
     <link rel="icon" href="../breadfast-logo (1).png">
     
-    <!-- Tailwind CSS -->
+    <!-- استدعاء Tailwind CSS للتصميم -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -24,19 +25,20 @@
         }
     </script>
     
-    <!-- FontAwesome -->
+    <!-- استدعاء FontAwesome للأيقونات -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبة قراءة ملفات الإكسيل -->
+    <!-- استدعاء مكتبة قراءة ملفات الإكسيل XLSX -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- تنسيقات مخصصة -->
     <style>
         /* إخفاء سهم القائمة المنسدلة الافتراضي في حقول البحث Datalist */
         input[list]::-webkit-calendar-picker-indicator { 
             display: none !important; 
         }
         
-        /* تنسيقات الأكورديون للقوائم المنسدلة */
+        /* تنسيقات الأكورديون (لإظهار وإخفاء القوائم بمرونة) */
         .accordion-content {
             transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
             max-height: 0;
@@ -58,16 +60,30 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
 
-    <!-- إشعارات التوست السريعة -->
-    <div id="toastNotification" class="fixed top-4 left-1/2 -translate-x-1/2 transition-all duration-300 opacity-0 -translate-y-4 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]" role="status">
+    <!-- ========================================== -->
+    <!-- 1. إشعارات التوست السريعة (Toast)            -->
+    <!-- ========================================== -->
+    <div 
+        id="toastNotification" 
+        class="fixed top-4 left-1/2 -translate-x-1/2 transition-all duration-300 opacity-0 -translate-y-4 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]" 
+        role="status"
+    >
         <i id="toastIcon" class="fas"></i>
         <span id="toastMessage"></span>
     </div>
 
-    <!-- النافذة المنبثقة الاحترافية (Custom Modal) -->
-    <div id="customModal" class="hidden fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity opacity-0 duration-300">
-        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300" id="customModalContent">
-            
+    <!-- ========================================== -->
+    <!-- 2. النافذة المنبثقة الاحترافية (Modal)       -->
+    <!-- ========================================== -->
+    <div 
+        id="customModal" 
+        class="hidden fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity opacity-0 duration-300"
+    >
+        <div 
+            id="customModalContent" 
+            class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300"
+        >
+            <!-- هيدر النافذة -->
             <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
                 <h3 id="modalTitle" class="text-lg font-bold text-white">عنوان النافذة</h3>
                 <button type="button" onclick="closeModal()" class="text-gray-400 hover:text-white transition">
@@ -75,21 +91,25 @@
                 </button>
             </div>
             
-            <div id="modalBody" class="p-6 space-y-4 text-gray-300">
+            <!-- محتوى النافذة (يتغير بالبرمجة) -->
+            <div id="modalBody" class="p-6 space-y-4 text-gray-300 max-h-[60vh] overflow-y-auto">
                 <!-- سيتم حقن محتوى النافذة هنا من الجافاسكريبت -->
             </div>
             
+            <!-- أزرار النافذة -->
             <div class="p-4 border-t border-gray-700 bg-gray-900/50 flex justify-end gap-3">
                 <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">إلغاء</button>
                 <button type="button" id="modalConfirmBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-bold shadow-lg">تأكيد</button>
             </div>
-            
         </div>
     </div>
 
-    <!-- الهيدر -->
+    <!-- ========================================== -->
+    <!-- 3. الهيدر العلوي (Header)                    -->
+    <!-- ========================================== -->
     <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-40">
         <div class="flex items-center gap-3">
+            <!-- زر فتح القائمة الجانبية للموبايل -->
             <button id="menuToggle" type="button" class="md:hidden text-gray-300 hover:text-white transition" aria-label="فتح القائمة">
                 <i class="fas fa-bars text-xl"></i>
             </button>
@@ -99,7 +119,7 @@
             <span class="font-bold text-lg hidden sm:block">لوحة تحكم الإدارة</span>
         </div>
         <div class="flex items-center gap-4">
-            <button onclick="window.location.href='../index.html'" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition">
+            <button onclick="window.location.href='../index.html'" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition font-bold shadow">
                 تسجيل الخروج
             </button>
         </div>
@@ -107,89 +127,107 @@
 
     <div class="flex flex-1 overflow-hidden">
         
-        <!-- القائمة الجانبية (التابات) -->
+        <!-- ========================================== -->
+        <!-- 4. القائمة الجانبية (Sidebar / Tabs)         -->
+        <!-- ========================================== -->
         <div id="sidebarBackdrop" class="hidden fixed inset-0 bg-black/60 z-20 md:hidden"></div>
+        
         <aside id="adminSidebar" class="w-64 bg-gray-800 border-l border-gray-700 flex flex-col p-4 space-y-2 fixed md:relative inset-y-0 right-0 z-30 h-[calc(100vh-73px)] md:h-auto transform translate-x-full md:translate-x-0 transition-transform duration-300 overflow-y-auto">
             
-            <button onclick="switchTab('statsTab')" id="btn-statsTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <!-- زر الإحصائيات (مفعل افتراضياً) -->
+            <button onclick="switchTab('statsTab')" id="btn-statsTab" class="tab-btn w-full flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg transition font-bold">
                 <i class="fas fa-chart-pie w-5"></i> الإحصائيات
             </button>
             
-            <button onclick="switchTab('teamsTab')" id="btn-teamsTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('teamsTab')" id="btn-teamsTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-sitemap w-5"></i> إدارة الفرق
             </button>
             
-            <button onclick="switchTab('trucksTab')" id="btn-trucksTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('trucksTab')" id="btn-trucksTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-truck w-5"></i> إدارة الشاحنات
             </button>
             
-            <button onclick="switchTab('employeesTab')" id="btn-employeesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('employeesTab')" id="btn-employeesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-users w-5"></i> إدارة المناديب
             </button>
 
-            <!-- التاب الجديدة للفروع -->
-            <button onclick="switchTab('branchesTab')" id="btn-branchesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <!-- زر إدارة الفروع -->
+            <button onclick="switchTab('branchesTab')" id="btn-branchesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-code-branch w-5"></i> دليل الفروع
             </button>
             
-            <button onclick="switchTab('orderManageTab')" id="btn-orderManageTab" class="tab-btn w-full flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg transition">
+            <button onclick="switchTab('orderManageTab')" id="btn-orderManageTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-tasks w-5"></i> إدارة الأوردرات
             </button>
             
-            <button onclick="switchTab('pendingOrdersTab')" id="btn-pendingOrdersTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('pendingOrdersTab')" id="btn-pendingOrdersTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-box-open w-5"></i> الأوردرات المعلقة
             </button>
             
-            <button onclick="switchTab('systemTab')" id="btn-systemTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('systemTab')" id="btn-systemTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-bell w-5"></i> الإشعارات
             </button>
             
-            <button onclick="switchTab('activityTab')" id="btn-activityTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('activityTab')" id="btn-activityTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-history w-5"></i> سجل النشاطات
             </button>
             
-            <button onclick="switchTab('settingsTab')" id="btn-settingsTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+            <button onclick="switchTab('settingsTab')" id="btn-settingsTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition font-bold">
                 <i class="fas fa-cog w-5"></i> الإعدادات
             </button>
             
         </aside>
 
-        <!-- المحتوى الرئيسي -->
+        <!-- ========================================== -->
+        <!-- 5. المحتوى الرئيسي لكل التابات               -->
+        <!-- ========================================== -->
         <main class="flex-1 overflow-y-auto p-6 bg-gray-900">
             
-            <!-- 1. تاب الإحصائيات -->
-            <section id="statsTab" class="tab-content hidden">
-                <h2 class="text-2xl font-bold mb-6">الإحصائيات</h2>
+            <!-- ======================= تاب الإحصائيات (تظهر كافتراضي) ======================= -->
+            <section id="statsTab" class="tab-content block">
+                <h2 class="text-2xl font-bold mb-6 border-b border-gray-700 pb-3">الإحصائيات الحية</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center">
-                        <h3 class="text-gray-400 mb-2">إجمالي المناديب</h3>
-                        <p class="text-3xl font-bold text-white" id="stat-total-reps">0</p>
+                    
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <h3 class="text-gray-400 mb-2 font-bold">إجمالي المناديب</h3>
+                        <p class="text-4xl font-bold text-white" id="stat-total-reps">0</p>
                     </div>
-                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center">
-                        <h3 class="text-gray-400 mb-2">الأوردرات الجاهزة</h3>
-                        <p class="text-3xl font-bold text-blue-400" id="stat-ready-orders">0</p>
+                    
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <h3 class="text-gray-400 mb-2 font-bold">الأوردرات الجاهزة للتسليم</h3>
+                        <p class="text-4xl font-bold text-blue-400" id="stat-ready-orders">0</p>
                     </div>
-                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center">
-                        <h3 class="text-gray-400 mb-2">الأوردرات المُسلمة اليوم</h3>
-                        <p class="text-3xl font-bold text-green-400" id="stat-done-orders">0</p>
+                    
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
+                        <h3 class="text-gray-400 mb-2 font-bold">تم التسليم اليوم</h3>
+                        <p class="text-4xl font-bold text-green-400" id="stat-done-orders">0</p>
                     </div>
+                    
                 </div>
             </section>
 
-            <!-- 2. تاب إدارة الفرق -->
+            <!-- ======================= تاب إدارة الفرق ======================= -->
             <section id="teamsTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
                     <h2 class="text-2xl font-bold">إدارة الفرق (Teams)</h2>
                 </div>
-                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
+                
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
                     <form id="teamForm" class="flex flex-col md:flex-row gap-4">
-                        <input type="text" id="newTeamName" placeholder="اسم التيم (مثال: تيم أكتوبر)" required class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap">
+                        <input 
+                            type="text" 
+                            id="newTeamName" 
+                            placeholder="اسم التيم (مثال: تيم أكتوبر)" 
+                            required 
+                            class="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none"
+                        >
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg whitespace-nowrap">
                             <i class="fas fa-plus ml-2"></i> إضافة تيم
                         </button>
                     </form>
                 </div>
-                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
+                
+                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700 shadow-lg">
                     <table class="w-full text-right text-sm">
                         <thead class="bg-gray-700 text-gray-300">
                             <tr>
@@ -207,20 +245,28 @@
                 </div>
             </section>
 
-            <!-- 3. تاب إدارة الشاحنات -->
+            <!-- ======================= تاب إدارة الشاحنات ======================= -->
             <section id="trucksTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
                     <h2 class="text-2xl font-bold">إدارة الشاحنات (Cars)</h2>
                 </div>
-                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
+                
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
                     <form id="truckForm" class="flex flex-col md:flex-row gap-4">
-                        <input type="text" id="newTruckName" placeholder="رقم أو اسم العربية (مثال: سيارة 12)" required class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap">
+                        <input 
+                            type="text" 
+                            id="newTruckName" 
+                            placeholder="رقم أو اسم العربية (مثال: سيارة 12)" 
+                            required 
+                            class="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none"
+                        >
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold shadow-lg whitespace-nowrap">
                             <i class="fas fa-plus ml-2"></i> إضافة عربية
                         </button>
                     </form>
                 </div>
-                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
+                
+                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700 shadow-lg">
                     <table class="w-full text-right text-sm">
                         <thead class="bg-gray-700 text-gray-300">
                             <tr>
@@ -238,29 +284,33 @@
                 </div>
             </section>
 
-            <!-- 4. تاب إدارة المناديب -->
+            <!-- ======================= تاب إدارة المناديب ======================= -->
             <section id="employeesTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
                     <h2 class="text-2xl font-bold">إدارة المناديب</h2>
-                    <button id="toggleEmployeeFormBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" type="button">
+                    <button id="toggleEmployeeFormBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-lg font-bold" type="button">
                         <i class="fas fa-plus"></i> تسجيل مندوب
                     </button>
                 </div>
-                <div id="employeeFormPanel" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
-                    <h3 class="text-lg font-bold mb-4">تسجيل مندوب جديد</h3>
+                
+                <!-- فورم إضافة مندوب جديد -->
+                <div id="employeeFormPanel" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
+                    <h3 class="text-lg font-bold mb-4 text-blue-400">تسجيل بيانات مندوب جديد</h3>
                     <form id="employeeForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input type="text" id="newEmpName" placeholder="اسم المندوب" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                        <input type="text" id="newEmpHrid" placeholder="HRID" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                        <input type="text" id="newEmpMobile" placeholder="رقم الموبايل" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                        <select id="newEmpTeam" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <input type="text" id="newEmpName" placeholder="اسم المندوب" required class="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <input type="text" id="newEmpHrid" placeholder="HRID" required class="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <input type="text" id="newEmpMobile" placeholder="رقم الموبايل" required class="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <select id="newEmpTeam" required class="px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                             <option value="">اختر التيم...</option>
                         </select>
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold md:col-span-4 mt-2">
-                            حفظ المندوب
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold md:col-span-4 mt-2 shadow-lg text-lg">
+                            حفظ المندوب في النظام
                         </button>
                     </form>
                 </div>
-                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
+                
+                <!-- جدول عرض المناديب -->
+                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700 shadow-lg">
                     <table class="w-full text-right text-sm">
                         <thead class="bg-gray-700 text-gray-300">
                             <tr>
@@ -282,68 +332,97 @@
                 </div>
             </section>
 
-            <!-- تاب إدارة الفروع (الجديد) -->
+            <!-- ======================= تاب دليل الفروع والموظفين ======================= -->
             <section id="branchesTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold">دليل الفروع وتصاريح الدخول</h2>
-                    <button id="toggleBranchFormBtn" onclick="document.getElementById('branchFormPanel').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition shadow-lg">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
+                    <h2 class="text-2xl font-bold">دليل الفروع وموظفي الاستلام</h2>
+                    <button id="toggleBranchFormBtn" onclick="document.getElementById('branchFormPanel').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition shadow-lg font-bold">
                         <i class="fas fa-plus"></i> إضافة فرع
                     </button>
                 </div>
                 
                 <!-- فورم إضافة فرع جديد -->
                 <div id="branchFormPanel" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
-                    <h3 class="text-lg font-bold mb-4 text-blue-400">إضافة بيانات فرع جديد</h3>
-                    <form id="branchForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">إضافة بيانات فرع جديد</h3>
+                    
+                    <form id="branchForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">اسم الفرع (بالشيت)</label>
-                            <input type="text" id="brName" placeholder="مثال: BCAB/Breadfast Coffee..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <label class="block text-sm font-bold text-gray-300 mb-2">اسم الفرع (كما يظهر بالشيت)</label>
+                            <input type="text" id="brName" placeholder="مثال: BCAB/Breadfast Coffee..." required class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         </div>
+                        
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">مواعيد العمل</label>
-                            <input type="text" id="brHours" placeholder="مثال: من 9 ص إلى 5 م" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <label class="block text-sm font-bold text-gray-300 mb-2">مواعيد العمل</label>
+                            <input type="text" id="brHours" placeholder="مثال: من 9 ص إلى 5 م" required class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         </div>
+                        
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">اللوكيشن (رابط أو وصف)</label>
-                            <input type="text" id="brLocation" placeholder="رابط خرائط جوجل أو وصف العنوان" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <label class="block text-sm font-bold text-gray-300 mb-2">اللوكيشن (رابط أو وصف عنوان)</label>
+                            <input type="text" id="brLocation" placeholder="رابط خرائط جوجل أو العنوان" required class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         </div>
+                        
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">مدير الفرع</label>
-                            <input type="text" id="brManager" placeholder="اسم مدير الفرع ورقم التواصل" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <label class="block text-sm font-bold text-gray-300 mb-2">مدير الفرع الأساسي</label>
+                            <input type="text" id="brManager" placeholder="اسم مدير الفرع ورقم التواصل" required class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         </div>
+                        
+                        <!-- قسم الموظفين الديناميكي (Dynamic Staff) -->
+                        <div class="md:col-span-2 bg-gray-900/80 p-5 rounded-xl border border-gray-600 shadow-inner">
+                            <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                                <label class="block text-base font-bold text-yellow-400">
+                                    <i class="fas fa-users mr-1"></i> موظفي الفرع للاستلام والتواصل
+                                </label>
+                                <button type="button" onclick="addStaffField()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition shadow">
+                                    <i class="fas fa-plus"></i> إضافة موظف آخر
+                                </button>
+                            </div>
+                            <!-- الحاوية التي يضاف بداخلها حقول الموظفين -->
+                            <div id="dynamicStaffContainer" class="space-y-4">
+                                <!-- سيتم إضافة حقول الموظفين هنا بواسطة الجافاسكريبت -->
+                            </div>
+                        </div>
+
+                        <!-- تصريح الدخول -->
                         <div class="md:col-span-2">
-                            <label class="block text-xs text-gray-400 mb-1">الموظفين المتواجدين بالفرع (اختياري)</label>
-                            <input type="text" id="brStaff" placeholder="أسماء الموظفين للرجوع إليهم" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <label class="block text-sm font-bold text-gray-300 mb-2">تصريح الدخول والتعليمات</label>
+                            <textarea id="brPermit" rows="3" placeholder="أكواد الدخول، التصاريح اللازمة، أو أي تعليمات خاصة بتسليم المندوب..." required class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500"></textarea>
                         </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-xs text-gray-400 mb-1">تصريح دخول الفرع (التعليمات / البوابات)</label>
-                            <textarea id="brPermit" rows="2" placeholder="أكواد الدخول، التصاريح اللازمة، أو أي تعليمات تسليم للمندوب..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500"></textarea>
-                        </div>
-                        <div class="md:col-span-2 flex justify-end mt-2">
-                            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition">حفظ بيانات الفرع</button>
+                        
+                        <div class="md:col-span-2 flex justify-end mt-4">
+                            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg transition text-lg w-full md:w-auto">
+                                <i class="fas fa-save mr-1"></i> حفظ بيانات الفرع في الدليل
+                            </button>
                         </div>
                     </form>
                 </div>
 
-                <!-- جدول عرض الفروع المضافة -->
+                <!-- جدول الفروع -->
                 <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
-                    <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
-                        <h3 class="text-lg font-bold text-white"><i class="fas fa-list-alt text-blue-400 ml-2"></i> الفروع المسجلة بالدليل</h3>
-                        <input type="text" id="searchBranchInput" placeholder="بحث باسم الفرع..." class="px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-white outline-none focus:border-blue-500 w-full max-w-xs">
+                    <div class="p-5 border-b border-gray-700 flex flex-col md:flex-row justify-between items-center bg-gray-900/50 gap-4">
+                        <h3 class="text-xl font-bold text-white">
+                            <i class="fas fa-list-alt text-blue-400 ml-2"></i> الفروع المسجلة بالدليل
+                        </h3>
+                        <div class="relative w-full md:w-auto">
+                            <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="searchBranchInput" placeholder="بحث باسم الفرع..." class="pl-3 pr-10 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-white outline-none focus:border-blue-500 w-full md:w-80 shadow-inner">
+                        </div>
                     </div>
+                    
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm">
                             <thead class="bg-gray-700 text-gray-300">
                                 <tr>
-                                    <th class="p-3">اسم الفرع</th>
-                                    <th class="p-3">مواعيد العمل</th>
-                                    <th class="p-3">المدير</th>
-                                    <th class="p-3 text-center">الإجراءات</th>
+                                    <th class="p-4 font-bold">اسم الفرع</th>
+                                    <th class="p-4 font-bold">مواعيد العمل</th>
+                                    <th class="p-4 font-bold">المدير</th>
+                                    <th class="p-4 font-bold text-center">الموظفين المتاحين</th>
+                                    <th class="p-4 font-bold text-center">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="branchesTableBody" class="divide-y divide-gray-700">
                                 <tr>
-                                    <td colspan="4" class="p-4 text-center text-gray-500">جاري التحميل...</td>
+                                    <td colspan="5" class="p-6 text-center text-gray-500 font-bold">جاري تحميل الفروع...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -351,77 +430,81 @@
                 </div>
             </section>
 
-            <!-- 5. تاب إدارة الأوردرات -->
-            <section id="orderManageTab" class="tab-content block">
-                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <!-- ======================= تاب إدارة الأوردرات والتوزيع ======================= -->
+            <section id="orderManageTab" class="tab-content hidden">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-gray-700 pb-3">
                     <h2 class="text-2xl font-bold">إدارة الأوردرات والتوزيع</h2>
                     <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
                         
-                        <!-- فلتر التاريخ -->
-                        <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 shadow-lg" title="تصفية الأوردرات المرفوعة حسب اليوم">
-                            <i class="fas fa-filter text-blue-400"></i>
-                            <input type="date" id="dbOrdersDateFilter" class="bg-transparent text-white outline-none text-sm cursor-pointer">
+                        <!-- فلتر التاريخ لقراءة قاعدة البيانات -->
+                        <div class="flex items-center gap-2 bg-gray-800 border border-blue-600 rounded-lg px-4 py-2 shadow-lg" title="تصفية الأوردرات المرفوعة حسب اليوم">
+                            <i class="fas fa-calendar-day text-blue-400"></i>
+                            <span class="text-xs text-gray-300 font-bold">عرض يوم:</span>
+                            <input type="date" id="dbOrdersDateFilter" class="bg-transparent text-white font-bold outline-none text-sm cursor-pointer">
                         </div>
                         
                         <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
                         
-                        <button id="manualUploadBtn" onclick="document.getElementById('excelFileInput').click()" type="button" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg transition">
-                            <i class="fas fa-file-upload"></i> استيراد من شيت
+                        <button id="manualUploadBtn" onclick="document.getElementById('excelFileInput').click()" type="button" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg transition">
+                            <i class="fas fa-file-excel"></i> استيراد شيت إكسيل
                         </button>
                         
-                        <button id="odooFetchBtn" type="button" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg transition">
+                        <button id="odooFetchBtn" type="button" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg transition">
                             <i class="fas fa-cloud-download-alt"></i> سحب من Odoo
                         </button>
                         
                     </div>
                 </div>
                 
-                <div id="uploadPromptContainer" class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
+                <!-- رسالة التوجيه (تختفي بعد رفع الشيت) -->
+                <div id="uploadPromptContainer" class="bg-gray-800 p-8 rounded-xl border border-gray-700 text-center shadow-lg">
                     <div class="text-gray-500 py-10">
-                        <i class="fas fa-boxes text-5xl mb-4 opacity-50"></i>
-                        <p class="text-lg mt-2">قم برفع شيت الإكسيل لتوزيع أوردرات اليوم.</p>
-                        <p class="text-sm mt-1">أو استخدم فلتر التاريخ بالأعلى لعرض سجل الأوردرات السابقة.</p>
+                        <i class="fas fa-boxes text-6xl mb-6 opacity-50 text-blue-400"></i>
+                        <h3 class="text-2xl font-bold text-white mb-2">منطقة توزيع الأوردرات</h3>
+                        <p class="text-lg mt-2 text-gray-400">قم برفع شيت الإكسيل لتوزيع أوردرات وعربيات اليوم.</p>
+                        <p class="text-sm mt-3 text-gray-500 border-t border-gray-700 pt-3 inline-block">أو استخدم فلتر التاريخ بالأعلى لعرض سجل الأوردرات السابقة التي تم توزيعها بالفعل.</p>
                     </div>
                 </div>
 
-                <!-- لوحة تقسيم الفروع قبل العرض -->
-                <div id="sheetMappingWizard" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
-                    <h3 class="text-xl font-bold mb-4 text-blue-400 border-b border-gray-700 pb-3">
-                        <i class="fas fa-cogs ml-2"></i> إعداد وتقسيم فروع الشيت
+                <!-- 1. لوحة تقسيم الفروع وتعيين العربيات (Wizard) -->
+                <div id="sheetMappingWizard" class="hidden bg-gray-800 p-6 rounded-xl border border-blue-600 shadow-2xl mt-4">
+                    <h3 class="text-xl font-bold mb-6 text-blue-400 border-b border-gray-700 pb-3">
+                        <i class="fas fa-cogs ml-2"></i> الخطوة الأولى: إعداد وتقسيم فروع الشيت
                     </h3>
                     
-                    <div class="mb-6">
-                        <h4 class="font-bold mb-3 text-red-400 flex items-center gap-2">
-                            <i class="fas fa-exclamation-triangle"></i> فروع جديدة 
-                            <span id="newBranchesCount" class="bg-red-900/50 text-red-300 px-2 py-0.5 rounded text-sm">0</span>
+                    <div class="mb-6 bg-gray-900/50 p-4 rounded-xl border border-red-900/50">
+                        <h4 class="font-bold mb-4 text-red-400 flex items-center gap-2 text-lg">
+                            <i class="fas fa-exclamation-triangle"></i> فروع جديدة في الشيت 
+                            <span id="newBranchesCount" class="bg-red-600 text-white px-2 py-0.5 rounded text-sm shadow">0</span>
                         </h4>
-                        <div class="overflow-x-auto rounded-lg border border-gray-700">
+                        <div class="overflow-x-auto rounded-lg border border-gray-700 shadow-inner">
                             <table class="w-full text-right text-sm">
                                 <thead class="bg-gray-700">
                                     <tr>
-                                        <th class="p-3">اسم الفرع في الشيت</th>
-                                        <th class="p-3">تعيين لعربية</th>
-                                        <th class="p-3 w-1/3">أو تجاهل الفرع (السبب)</th>
+                                        <th class="p-4 font-bold">اسم الفرع في الشيت</th>
+                                        <th class="p-4 font-bold">تعيين لعربية</th>
+                                        <th class="p-4 font-bold w-1/3">أو تجاهل الفرع بالكامل (اكتب السبب)</th>
                                     </tr>
                                 </thead>
                                 <tbody id="newBranchesTableBody" class="divide-y divide-gray-700">
+                                    <!-- يتم الحقن من الجافاسكريبت -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <div class="mb-6">
-                        <h4 class="font-bold mb-3 text-green-400 flex items-center gap-2 cursor-pointer" onclick="document.getElementById('savedBranchesContainer').classList.toggle('hidden')">
-                            <i class="fas fa-check-circle"></i> فروع مسجلة مسبقاً (اضغط للعرض/الإخفاء)
-                            <span id="savedBranchesCount" class="bg-green-900/50 text-green-300 px-2 py-0.5 rounded text-sm">0</span>
+                    <div class="mb-8">
+                        <h4 class="font-bold mb-4 text-green-400 flex items-center gap-2 cursor-pointer bg-gray-900/50 p-3 rounded-lg border border-green-900/50 hover:bg-gray-700 transition" onclick="document.getElementById('savedBranchesContainer').classList.toggle('hidden')">
+                            <i class="fas fa-check-circle"></i> فروع مسجلة وتم تعيينها مسبقاً (اضغط هنا للعرض أو الإخفاء)
+                            <span id="savedBranchesCount" class="bg-green-600 text-white px-2 py-0.5 rounded text-sm shadow ml-auto">0</span>
                         </h4>
-                        <div id="savedBranchesContainer" class="hidden overflow-x-auto rounded-lg border border-gray-700">
+                        <div id="savedBranchesContainer" class="hidden overflow-x-auto rounded-lg border border-gray-700 shadow-inner mt-2">
                             <table class="w-full text-right text-sm">
                                 <thead class="bg-gray-700">
                                     <tr>
-                                        <th class="p-3">اسم الفرع</th>
-                                        <th class="p-3">العربية المعينة</th>
-                                        <th class="p-3">الحالة</th>
+                                        <th class="p-4 font-bold">اسم الفرع</th>
+                                        <th class="p-4 font-bold">العربية المعينة حالياً</th>
+                                        <th class="p-4 font-bold">حالة الفرع</th>
                                     </tr>
                                 </thead>
                                 <tbody id="savedBranchesTableBody" class="divide-y divide-gray-700">
@@ -430,230 +513,326 @@
                         </div>
                     </div>
 
-                    <div class="mb-6 border-t border-gray-700 pt-4">
-                        <h4 class="font-bold mb-3 text-yellow-400 flex items-center gap-2">
-                            <i class="fas fa-filter"></i> استبعاد أقسام (Categories) من التحضير
+                    <div class="mb-6 border-t border-gray-700 pt-6">
+                        <h4 class="font-bold mb-4 text-yellow-400 flex items-center gap-2 text-lg">
+                            <i class="fas fa-filter"></i> استبعاد أقسام (Categories) من التحضير والتوزيع
                         </h4>
-                        <div id="categoriesContainer" class="flex flex-wrap gap-3">
+                        <div id="categoriesContainer" class="flex flex-wrap gap-3 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                            <!-- التخطي -->
                         </div>
                     </div>
 
-                    <button id="processSheetBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-lg text-lg mt-4 transition">
-                        تجهيز أوردرات الشيت للعرض والإسناد
+                    <button id="processSheetBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-lg text-xl mt-4 transition border border-blue-500">
+                        <i class="fas fa-cogs mr-2"></i> معالجة الشيت وتجهيز الأوردرات للإسناد
                     </button>
                 </div>
 
-                <!-- معاينة الشيت قبل الرفع النهائي -->
-                <div id="groupedOrdersContainer" class="hidden mt-6 bg-gray-800 p-6 rounded-xl border border-yellow-600 shadow-lg">
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 border-b border-gray-700 pb-3 gap-4">
-                        <h3 class="text-xl font-bold text-yellow-400">
-                            <i class="fas fa-eye ml-2"></i> معاينة الشيت وإسناد المناديب (لم يتم الحفظ بعد)
+                <!-- 2. معاينة الشيت وإسناد العربيات -->
+                <div id="groupedOrdersContainer" class="hidden mt-6 bg-gray-800 p-6 rounded-xl border border-yellow-600 shadow-2xl">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-gray-700 pb-4 gap-4">
+                        <h3 class="text-2xl font-bold text-yellow-400">
+                            <i class="fas fa-eye ml-2"></i> الخطوة الثانية: معاينة وإسناد المناديب للعربيات
                         </h3>
-                        <button id="confirmAndUploadOrdersBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg w-full md:w-auto">
-                            <i class="fas fa-check-double ml-1"></i> حفظ أوردرات اليوم في السيستم
+                        <button id="confirmAndUploadOrdersBtn" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg w-full md:w-auto text-lg border border-green-500 transition animate-pulse">
+                            <i class="fas fa-check-double ml-2"></i> اعتماد وحفظ الأوردرات في السيستم
                         </button>
                     </div>
                     
                     <div id="carsAccordionContainer" class="space-y-6">
+                        <!-- يعرض هنا الأكورديون الخاص بالمعاينة والإسناد -->
                     </div>
                 </div>
 
-                <!-- سجل الأوردرات الموزعة الفعلي (يقرأ من الداتا بيز بناءً على التاريخ) -->
-                <div id="dbGroupedOrdersContainer" class="mt-8 border-t border-gray-700 pt-6">
-                    <h3 class="text-xl font-bold text-white mb-4">
-                        <i class="fas fa-calendar-day text-blue-400 ml-2"></i> سجل الأوردرات الموزعة 
-                        <span id="displayFilteredDate" class="text-sm text-gray-400"></span>
+                <!-- 3. سجل الأوردرات الموزعة الفعلي (يقرأ من Firebase) -->
+                <div id="dbGroupedOrdersContainer" class="mt-10 border-t-2 border-dashed border-gray-700 pt-8">
+                    <h3 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                        <i class="fas fa-calendar-check text-blue-400"></i> سجل الأوردرات الموزعة 
+                        <span id="displayFilteredDate" class="text-base text-yellow-400 bg-gray-800 px-3 py-1 rounded-lg border border-gray-600"></span>
                     </h3>
                     <div id="dbCarsAccordionContainer" class="space-y-6">
-                        <div class="text-center text-gray-500 py-8">جاري جلب الأوردرات...</div>
+                        <div class="text-center text-gray-500 py-12 bg-gray-800 rounded-xl border border-gray-700">
+                            <i class="fas fa-search text-4xl mb-4 opacity-50"></i>
+                            <p class="text-lg">جاري جلب الأوردرات المسجلة لهذا اليوم...</p>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <!-- 6. تاب الأوردرات المعلقة والمرتجعات -->
+            <!-- ======================= تاب الأوردرات المعلقة والمرتجعات ======================= -->
             <section id="pendingOrdersTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
                     <h2 class="text-2xl font-bold text-orange-400">
                         <i class="fas fa-exclamation-circle ml-2"></i> الأوردرات المعلقة والمرتجعات
                     </h2>
                 </div>
                 
-                <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 mb-6 shadow-lg">
-                    <h3 class="text-lg font-bold mb-4">إنشاء أوردر معلق (مرفوض / مرتجع) لمندوب</h3>
+                <!-- فورم إنشاء أوردر معلق (نظام متسلسل Cascade) -->
+                <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 mb-8 shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-orange-500"></div>
                     
-                    <form id="orderForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <h3 class="text-xl font-bold mb-6 text-white border-b border-gray-700 pb-3">
+                        <i class="fas fa-plus-circle text-orange-400 ml-2"></i> تسجيل أوردر معلق أو مرتجع
+                    </h3>
+                    
+                    <form id="orderForm" class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">1. المندوب (HRID)</label>
-                            <input list="repsDataList" id="newOrderHrid" placeholder="ابحث باسم المندوب أو HRID" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
+                        <!-- الخطوة 1: المندوب -->
+                        <div class="bg-gray-900/50 p-4 rounded-lg border border-gray-700 shadow-inner">
+                            <label class="block text-sm font-bold text-blue-400 mb-2">
+                                <span class="bg-blue-900 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1">1</span> 
+                                المندوب صاحب المشكلة (HRID)
+                            </label>
+                            <input list="repsDataList" id="newOrderHrid" placeholder="ابحث باسم المندوب أو HRID..." required class="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow transition">
                             <datalist id="repsDataList"></datalist>
                         </div>
                         
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">2. الفرع</label>
-                            <select id="newOrderBranch" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                                <option value="">أدخل المندوب أولاً...</option>
+                        <!-- الخطوة 2: الفرع -->
+                        <div class="bg-gray-900/50 p-4 rounded-lg border border-gray-700 shadow-inner">
+                            <label class="block text-sm font-bold text-green-400 mb-2">
+                                <span class="bg-green-900 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1">2</span> 
+                                الفرع المتواجد به المنتج
+                            </label>
+                            <select id="newOrderBranch" required class="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow transition appearance-none">
+                                <option value="">أدخل المندوب أولاً لظهور فروعه...</option>
                             </select>
                         </div>
 
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">3. المنتج</label>
-                            <select id="newOrderProduct" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                                <option value="">أدخل الفرع أولاً...</option>
+                        <!-- الخطوة 3: المنتج -->
+                        <div class="bg-gray-900/50 p-4 rounded-lg border border-gray-700 shadow-inner">
+                            <label class="block text-sm font-bold text-yellow-400 mb-2">
+                                <span class="bg-yellow-900 text-white rounded-full w-5 h-5 inline-flex items-center justify-center text-xs ml-1">3</span> 
+                                المنتج المراد تعليقه
+                            </label>
+                            <select id="newOrderProduct" required class="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow transition appearance-none">
+                                <option value="">أدخل الفرع أولاً لظهور المنتجات...</option>
                             </select>
                         </div>
 
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">الباركود (تلقائي)</label>
-                            <input type="text" id="newOrderBarcode" placeholder="سيظهر تلقائياً" readonly required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed">
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">سبب التعليق</label>
-                            <input type="text" id="newOrderNotes" placeholder="مرفوض، تالف، الخ..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                        </div>
-                        
-                        <div class="flex items-end">
-                            <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg transition">
-                                حفظ كمعلق
-                            </button>
+                        <!-- معلومات إضافية (باركود وسبب التعليق) -->
+                        <div class="md:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-6 mt-2 border-t border-gray-700 pt-6">
+                            
+                            <div class="md:col-span-1">
+                                <label class="block text-xs font-bold text-gray-400 mb-2">الباركود (يُكتب تلقائياً)</label>
+                                <input type="text" id="newOrderBarcode" placeholder="سيظهر تلقائياً" readonly required class="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed font-mono text-center">
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-400 mb-2">السبب التفصيلي للتعليق</label>
+                                <input type="text" id="newOrderNotes" placeholder="اكتب السبب بوضوح (مثال: المنتج تالف، العميل رفض الاستلام...)" required class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow">
+                            </div>
+                            
+                            <div class="md:col-span-1 flex items-end">
+                                <button type="submit" class="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white px-4 py-3 rounded-lg font-bold shadow-lg transition text-lg border border-orange-400">
+                                    <i class="fas fa-save ml-2"></i> حفظ كمعلق
+                                </button>
+                            </div>
+                            
                         </div>
 
                     </form>
                 </div>
                 
-                <div class="flex flex-col md:flex-row gap-3 mb-4">
-                    <input id="adminOrderSearch" type="search" placeholder="بحث بالمنتج أو الباركود أو المندوب" class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                    <select id="adminOrderFilter" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                        <option value="all">الكل</option>
-                        <option value="Pending">قيد التعليق</option>
-                        <option value="Resolved">تم الحل/التسليم</option>
-                    </select>
+                <!-- فلتر وبحث المعلقات -->
+                <div class="flex flex-col md:flex-row gap-4 mb-6 bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-lg">
+                    <div class="flex-1 relative">
+                        <i class="fas fa-search absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input id="adminOrderSearch" type="search" placeholder="ابحث باسم المنتج، الباركود، اسم المندوب أو الفرع..." class="w-full pr-12 pl-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow-inner">
+                    </div>
+                    
+                    <div class="md:w-64">
+                        <select id="adminOrderFilter" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-orange-500 shadow-inner font-bold text-sm">
+                            <option value="all">عرض كل المعلقات والتسويات</option>
+                            <option value="Pending" selected>عرض قيد التعليق فقط</option>
+                            <option value="Resolved">عرض تم الحل والتسوية فقط</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <div id="adminPendingOrdersContainer" class="space-y-4">
-                    <div class="text-center text-gray-500 py-8">جاري جلب الأوردرات المعلقة...</div>
+                <!-- حاوية عرض الأوردرات المعلقة -->
+                <div id="adminPendingOrdersContainer" class="space-y-5">
+                    <div class="text-center text-gray-500 py-12 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
+                        <i class="fas fa-box-open text-5xl mb-4 opacity-50"></i>
+                        <p class="text-lg">جاري جلب سجل الأوردرات المعلقة...</p>
+                    </div>
                 </div>
             </section>
 
-            <!-- 7. تاب الإشعارات -->
+            <!-- ======================= تاب الإشعارات ======================= -->
             <section id="systemTab" class="tab-content hidden">
-                <h2 class="text-2xl font-bold mb-6">الإشعارات</h2>
+                <h2 class="text-2xl font-bold mb-6 border-b border-gray-700 pb-3">الإشعارات والنظام</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- إرسال إشعار -->
                     <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-blue-400">
-                            <i class="fas fa-paper-plane"></i> إرسال إشعار
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-blue-400">
+                            <i class="fas fa-paper-plane"></i> إرسال إشعار للمنصة
                         </h3>
                         
-                        <select id="notificationTargetType" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-3 outline-none focus:border-blue-500" onchange="toggleNotificationInput()">
-                            <option value="all">إرسال لكل المسجلين</option>
-                            <option value="rep">إرسال لمندوب محدد</option>
-                            <option value="team">إرسال لتيم معين</option>
-                            <option value="car">إرسال لعربية معينة</option>
+                        <label class="block text-sm text-gray-400 mb-2">الفئة المستهدفة</label>
+                        <select id="notificationTargetType" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white mb-4 outline-none focus:border-blue-500 shadow-inner" onchange="toggleNotificationInput()">
+                            <option value="all">إرسال للجميع (إشعار عام)</option>
+                            <option value="rep">إرسال لمندوب محدد بالاسم</option>
+                            <option value="team">إرسال لجميع أفراد تيم معين</option>
+                            <option value="car">إرسال لمندوب سيارة معينة</option>
                         </select>
                         
-                        <div id="targetRepContainer" class="hidden mb-3">
-                            <input list="repsDataList" id="targetRepValue" placeholder="ابحث واختر المندوب..." class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <div id="targetRepContainer" class="hidden mb-4">
+                            <input list="repsDataList" id="targetRepValue" placeholder="ابحث واختر المندوب..." class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
                         </div>
                         
-                        <div id="targetTeamContainer" class="hidden mb-3">
-                            <select id="targetTeamValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <div id="targetTeamContainer" class="hidden mb-4">
+                            <select id="targetTeamValue" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
                                 <option value="">اختر التيم...</option>
                             </select>
                         </div>
                         
-                        <div id="targetCarContainer" class="hidden mb-3">
-                            <select id="targetCarValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        <div id="targetCarContainer" class="hidden mb-4">
+                            <select id="targetCarValue" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
                                 <option value="">اختر العربية...</option>
                             </select>
                         </div>
                         
-                        <textarea id="globalNotificationText" rows="3" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-4 outline-none focus:border-blue-500" placeholder="اكتب نص الإشعار هنا..."></textarea>
+                        <label class="block text-sm text-gray-400 mb-2">نص الإشعار</label>
+                        <textarea id="globalNotificationText" rows="4" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white mb-6 outline-none focus:border-blue-500 shadow-inner" placeholder="اكتب التعليمات أو الرسالة هنا..."></textarea>
                         
-                        <button onclick="sendNotification()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow">
-                            إرسال الإشعار
+                        <button onclick="sendNotification()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-lg transition text-lg">
+                            <i class="fas fa-paper-plane ml-2"></i> إرسال الإشعار فوراً
                         </button>
                     </div>
 
-                    <div class="bg-gray-800 p-6 rounded-xl border border-red-900/50 shadow-lg">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-red-500">
-                            <i class="fas fa-sign-out-alt"></i> إخراج جميع الحسابات
+                    <!-- طوارئ النظام -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-red-900/50 shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-full h-1 bg-red-600"></div>
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-red-500 mt-2">
+                            <i class="fas fa-exclamation-triangle"></i> طوارئ النظام
                         </h3>
-                        <p class="text-sm text-gray-400 mb-4">بالضغط على هذا الزر، سيتم إجبار جميع المناديب على تسجيل الخروج من النظام فوراً وسيطلب منهم تسجيل الدخول بالـ PIN مرة أخرى.</p>
-                        <button onclick="forceLogoutConfirm()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold mt-6 shadow">
-                            تسجيل خروج الجميع (Force Logout)
+                        <div class="bg-red-900/20 p-4 rounded-lg border border-red-900/50 mb-6">
+                            <h4 class="font-bold text-white mb-2">إخراج جميع الحسابات (Force Logout)</h4>
+                            <p class="text-sm text-gray-300 leading-relaxed">
+                                بالضغط على هذا الزر، سيتم قطع الاتصال عن جميع المناديب المسجلين دخولهم حالياً على المنصة، 
+                                وسيُطلب منهم إدخال الـ PIN الخاص بهم مرة أخرى للاستمرار في العمل. 
+                                يستخدم هذا الإجراء عند تحديث السيستم أو لدواع أمنية.
+                            </p>
+                        </div>
+                        
+                        <button onclick="forceLogoutConfirm()" class="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-lg font-bold mt-2 shadow-lg transition text-lg border border-red-500">
+                            <i class="fas fa-sign-out-alt ml-2"></i> تنفيذ تسجيل خروج إجباري للجميع
                         </button>
                     </div>
                 </div>
             </section>
 
-            <!-- 8. تاب سجل النشاطات -->
+            <!-- ======================= تاب سجل النشاطات ======================= -->
             <section id="activityTab" class="tab-content hidden">
-                <h2 class="text-2xl font-bold mb-6">سجل النشاطات</h2>
-                <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-lg">
-                    <div class="text-center text-gray-500">سجل نشاطات النظام سيظهر هنا قريباً...</div>
+                <h2 class="text-2xl font-bold mb-6 border-b border-gray-700 pb-3">سجل نشاطات النظام (Logs)</h2>
+                <div class="bg-gray-800 rounded-xl border border-gray-700 p-8 shadow-lg">
+                    <div class="text-center text-gray-500">
+                        <i class="fas fa-history text-6xl mb-4 opacity-30"></i>
+                        <h3 class="text-xl font-bold text-gray-400">قريباً...</h3>
+                        <p class="mt-2 text-sm">سيتم عرض سجل كامل بحركة النظام (من دخل، من قام بتعديل، ووقت التعديل) في التحديثات القادمة.</p>
+                    </div>
                 </div>
             </section>
 
-            <!-- 9. تاب الإعدادات -->
+            <!-- ======================= تاب الإعدادات ======================= -->
             <section id="settingsTab" class="tab-content hidden">
-                <h2 class="text-2xl font-bold mb-6">إعدادات النظام</h2>
+                <h2 class="text-2xl font-bold mb-6 border-b border-gray-700 pb-3">إعدادات النظام والتحكم</h2>
+                
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     
-                    <!-- إعدادات Odoo اللي طلبت تعديلها -->
+                    <!-- إعدادات Odoo -->
                     <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
-                            <i class="fas fa-database"></i> بيانات ربط Odoo
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-white border-b border-gray-700 pb-3">
+                            <i class="fas fa-database text-purple-400"></i> إعدادات الربط مع Odoo
                         </h3>
-                        <form id="odooSettingsForm" class="space-y-4">
+                        <form id="odooSettingsForm" class="space-y-5">
                             <div>
-                                <label class="block text-sm text-gray-400 mb-1">اسم المستخدم لأودو (بدون @)</label>
-                                <!-- تم تغيير الـ Type لـ text عشان ميتطلبش @ -->
-                                <input type="text" id="odooUsername" placeholder="مثال: username123" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                                <label class="block text-sm font-bold text-gray-300 mb-2">اسم المستخدم (Username)</label>
+                                <!-- الحقل الآن text ليقبل أسماء مستخدمين بدون @ -->
+                                <input type="text" id="odooUsername" placeholder="مثال: username123" required class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-purple-500 shadow-inner">
+                                <p class="text-xs text-gray-500 mt-1">اكتب اسم المستخدم كما هو مسجل في أودو بدون الحاجة لعلامة @</p>
                             </div>
                             <div>
-                                <label class="block text-sm text-gray-400 mb-1">كلمة المرور</label>
-                                <input type="password" id="odooPassword" placeholder="كلمة المرور" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                                <label class="block text-sm font-bold text-gray-300 mb-2">كلمة المرور (Password)</label>
+                                <input type="password" id="odooPassword" placeholder="••••••••" required class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-purple-500 shadow-inner">
                             </div>
-                            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold shadow">
-                                حفظ بيانات أودو
+                            <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-bold shadow-lg transition border border-purple-500 mt-2 text-lg">
+                                <i class="fas fa-save ml-2"></i> حفظ بيانات أودو
                             </button>
                         </form>
                     </div>
                     
-                    <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 shadow-lg">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-orange-500">
-                            <i class="fas fa-power-off"></i> حالة المنصة
+                    <!-- حالة المنصة -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-1 h-full bg-orange-500"></div>
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-white border-b border-gray-700 pb-3">
+                            <i class="fas fa-power-off text-orange-500"></i> التحكم في حالة المنصة
                         </h3>
-                        <p class="text-sm text-gray-400 mb-4">يمكنك تعطيل دخول المناديب للمنصة مؤقتاً لأغراض الصيانة.</p>
-                        <button id="togglePlatformBtn" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-lg font-bold mt-6 shadow">
-                            تعطيل المنصة
+                        
+                        <div class="bg-orange-900/20 p-4 rounded-lg border border-orange-900/50 mb-6">
+                            <h4 class="font-bold text-white mb-2">وضع الصيانة (Maintenance Mode)</h4>
+                            <p class="text-sm text-gray-300 leading-relaxed">
+                                يمكنك تعطيل دخول جميع المناديب للمنصة مؤقتاً لأغراض الصيانة أو عند وجود خطأ في البيانات. 
+                                سيظهر للمناديب رسالة بأن المنصة تحت الصيانة حالياً ولن يتمكنوا من الدخول.
+                            </p>
+                        </div>
+                        
+                        <button id="togglePlatformBtn" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-lg font-bold mt-2 shadow-lg transition text-lg border border-orange-500">
+                            <i class="fas fa-lock ml-2"></i> تفعيل وضع الصيانة (تعطيل المنصة)
                         </button>
                     </div>
 
-                    <!-- قسم مديري الشيفت (الجديد) اللي طلبته -->
-                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1 md:col-span-2 mt-2">
-                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-blue-400">
-                            <i class="fas fa-user-tie"></i> إدارة مديري الشيفت
+                    <!-- إدارة مديري الشيفت (الجديد كلياً) -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1 md:col-span-2 mt-4">
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-blue-400 border-b border-gray-700 pb-3">
+                            <i class="fas fa-user-tie"></i> إدارة مديري الشيفت والمشرفين
                         </h3>
-                        <form id="shiftManagerForm" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                            <input type="text" id="smName" placeholder="اسم المدير" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                            <input type="text" id="smPhone" placeholder="رقم الهاتف" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                            <input type="text" id="smWhatsapp" placeholder="رقم الواتساب" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
-                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow transition">إضافة مدير</button>
-                        </form>
-                        <div class="overflow-x-auto rounded-lg border border-gray-700">
+                        
+                        <!-- فورم إضافة مدير جديد -->
+                        <div class="bg-gray-900/50 p-5 rounded-xl border border-gray-600 mb-8">
+                            <h4 class="font-bold text-white mb-4 text-sm">إضافة مدير شيفت جديد للظهور في تطبيق المناديب:</h4>
+                            
+                            <form id="shiftManagerForm" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 mb-2">الاسم بالكامل</label>
+                                    <input type="text" id="smName" placeholder="الاسم للظهور للمندوب" required class="w-full px-4 py-2.5 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 mb-2">رقم الواتساب (للتواصل)</label>
+                                    <input type="text" id="smWhatsapp" placeholder="مثال: +2010..." dir="ltr" required class="w-full px-4 py-2.5 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 mb-2">صورة المدير الشخصية</label>
+                                    <div class="relative w-full">
+                                        <!-- إخفاء الانبوت الأصلي ووضع تصميم مخصص عليه -->
+                                        <input type="file" id="smImage" accept="image/*" required class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-400 outline-none focus:border-blue-500 text-sm cursor-pointer shadow-inner file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-900/50 file:text-blue-400 hover:file:bg-blue-900 transition">
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-lg transition h-[42px] border border-blue-500">
+                                    <i class="fas fa-plus mr-1"></i> إضافة للمديرين
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <!-- جدول عرض المديرين -->
+                        <h4 class="font-bold text-white mb-4 text-sm"><i class="fas fa-list-ul ml-2"></i> قائمة مديري الشيفت الحاليين:</h4>
+                        <div class="overflow-x-auto rounded-xl border border-gray-700 shadow-lg">
                             <table class="w-full text-right text-sm">
-                                <thead class="bg-gray-700 text-gray-300">
+                                <thead class="bg-gray-700 text-gray-300 border-b border-gray-600">
                                     <tr>
-                                        <th class="p-3">الاسم</th>
-                                        <th class="p-3">رقم الهاتف</th>
-                                        <th class="p-3">الواتساب</th>
-                                        <th class="p-3 text-center">الإجراءات</th>
+                                        <th class="p-4 text-center w-24 font-bold">الصورة</th>
+                                        <th class="p-4 font-bold">الاسم</th>
+                                        <th class="p-4 font-bold">رقم الواتساب</th>
+                                        <th class="p-4 text-center font-bold">الإجراءات</th>
                                     </tr>
                                 </thead>
-                                <tbody id="shiftManagersTableBody" class="divide-y divide-gray-700">
-                                    <tr><td colspan="4" class="p-4 text-center text-gray-500">جاري التحميل...</td></tr>
+                                <tbody id="shiftManagersTableBody" class="divide-y divide-gray-700 bg-gray-800">
+                                    <tr>
+                                        <td colspan="4" class="p-6 text-center text-gray-500 font-bold">جاري تحميل المديرين...</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -665,12 +844,16 @@
         </main>
     </div>
 
-    <!-- سكربت التحكم في الواجهة (UI) -->
+    <!-- ========================================== -->
+    <!-- أكواد التحكم في واجهة المستخدم (UI Logic)  -->
+    <!-- ========================================== -->
     <script>
+        // تعريف المتغيرات للعناصر الأساسية
         const adminSidebar = document.getElementById('adminSidebar');
         const sidebarBackdrop = document.getElementById('sidebarBackdrop');
         const menuToggle = document.getElementById('menuToggle');
 
+        // التحكم في فتح وغلق القائمة الجانبية في الموبايل
         function setSidebarOpen(isOpen) {
             adminSidebar.classList.toggle('translate-x-full', !isOpen);
             sidebarBackdrop.classList.toggle('hidden', !isOpen);
@@ -680,40 +863,52 @@
             setSidebarOpen(adminSidebar.classList.contains('translate-x-full'));
         });
         
-        sidebarBackdrop?.addEventListener('click', () => setSidebarOpen(false));
+        sidebarBackdrop?.addEventListener('click', () => {
+            setSidebarOpen(false);
+        });
 
+        // دالة التنقل بين التابات (Tab Switcher)
         function switchTab(tabId) {
+            // إخفاء كل التابات
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.add('hidden');
                 tab.classList.remove('block');
             });
             
+            // إظهار التاب المحددة
             const selectedTab = document.getElementById(tabId);
             if(selectedTab) {
                 selectedTab.classList.remove('hidden');
                 selectedTab.classList.add('block');
             }
             
+            // إعادة تنسيق أزرار القائمة الجانبية للون الرمادي
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-blue-600', 'text-white');
                 btn.classList.add('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
             });
             
+            // تلوين الزر النشط باللون الأزرق
             const activeBtn = document.getElementById('btn-' + tabId);
             if(activeBtn) {
                 activeBtn.classList.remove('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
                 activeBtn.classList.add('bg-blue-600', 'text-white');
             }
             
+            // غلق القائمة الجانبية في الموبايل بعد الاختيار
             setSidebarOpen(false);
         }
 
+        // دالة التحكم في شكل حقل المستهدفين في الإشعارات
         function toggleNotificationInput() {
             const type = document.getElementById('notificationTargetType').value;
+            
+            // إخفاء الكل أولاً
             document.getElementById('targetRepContainer').classList.add('hidden');
             document.getElementById('targetTeamContainer').classList.add('hidden');
             document.getElementById('targetCarContainer').classList.add('hidden');
 
+            // إظهار المطلوب بناءً على الاختيار
             if(type === 'rep') {
                 document.getElementById('targetRepContainer').classList.remove('hidden');
             } else if(type === 'team') {
@@ -723,26 +918,32 @@
             }
         }
 
+        // ==========================================
+        // نظام النافذة المنبثقة (Custom Modal System)
+        // ==========================================
         const customModal = document.getElementById('customModal');
         const customModalContent = document.getElementById('customModalContent');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
-        let currentModalAction = null;
+        let currentModalAction = null; // تخزين وظيفة زر التأكيد
 
         function openModal(title, htmlContent, confirmText, confirmColorClass, actionCallback) {
+            // تعيين النصوص والتصميم
             modalTitle.innerText = title;
             modalBody.innerHTML = htmlContent;
             
             modalConfirmBtn.innerText = confirmText;
-            modalConfirmBtn.className = `px-4 py-2 text-white rounded-lg transition font-bold shadow-lg ${confirmColorClass}`;
+            modalConfirmBtn.className = `px-6 py-2.5 text-white rounded-lg transition font-bold shadow-lg text-sm border ${confirmColorClass}`;
             
+            // تخزين الوظيفة المطلوبة عند الضغط على تأكيد
             currentModalAction = actionCallback;
             modalConfirmBtn.onclick = () => {
                 if(currentModalAction) currentModalAction();
-                closeModal();
+                closeModal(); // غلق النافذة بعد التنفيذ
             };
 
+            // أنيميشن الفتح
             customModal.classList.remove('hidden');
             setTimeout(() => {
                 customModal.classList.remove('opacity-0');
@@ -752,43 +953,105 @@
         }
 
         function closeModal() {
+            // أنيميشن الغلق
             customModal.classList.add('opacity-0');
             customModalContent.classList.remove('scale-100');
             customModalContent.classList.add('scale-95');
+            
+            // إخفاء العنصر بعد انتهاء الأنيميشن
             setTimeout(() => {
                 customModal.classList.add('hidden');
             }, 300);
         }
 
+        // إتاحة الدوال للسكربتات الخارجية
         window.UI = { openModal, closeModal };
         
+        // دالة مخصصة لزر طوارئ النظام
         function forceLogoutConfirm() {
             window.UI.openModal(
                 "تأكيد تسجيل الخروج الجماعي",
-                "<p class='text-red-400 font-bold'>تحذير!</p><p>هل أنت متأكد من إخراج جميع المناديب من النظام فوراً؟ سيطلب منهم إدخال الـ PIN الخاص بهم مرة أخرى.</p>",
-                "تسجيل خروج الجميع",
-                "bg-red-600 hover:bg-red-700",
-                () => { if(window.forceLogoutAll) window.forceLogoutAll(); }
+                `
+                <div class="bg-red-900/20 p-4 rounded-lg border border-red-900/50 mb-2">
+                    <p class='text-red-400 font-bold text-lg mb-2'><i class="fas fa-exclamation-triangle"></i> تحذير أمني!</p>
+                    <p class="text-sm leading-relaxed text-gray-300">هل أنت متأكد من إخراج جميع المناديب من النظام فوراً؟</p>
+                    <p class="text-sm leading-relaxed text-gray-400 mt-2">سيطلب منهم إدخال الـ PIN الخاص بهم مرة أخرى للاستمرار.</p>
+                </div>
+                `,
+                "نعم، تسجيل خروج الجميع",
+                "bg-red-600 hover:bg-red-700 border-red-500",
+                () => { 
+                    if(window.forceLogoutAll) window.forceLogoutAll(); 
+                }
             );
         }
 
+        // ==========================================
+        // دالة الأكورديون (Accordion Toggle)
+        // ==========================================
         function toggleAccordion(headerElement) {
             const content = headerElement.nextElementSibling;
             const chevron = headerElement.querySelector('.chevron');
             
+            // لو مفتوح، اقفله
             if (content.classList.contains('open')) {
                 content.classList.remove('open');
                 content.classList.add('p-0', 'border-0');
                 content.classList.remove('p-4', 'border-t');
                 chevron.classList.remove('open');
-            } else {
+            } 
+            // لو مقفول، افتحه
+            else {
                 content.classList.add('open', 'p-4', 'border-t', 'border-gray-700');
                 content.classList.remove('p-0', 'border-0');
                 chevron.classList.add('open');
             }
         }
+
+        // ==========================================
+        // إضافة حقول موظفين الفرع ديناميكياً (Dynamic Staff)
+        // ==========================================
+        function addStaffField(name = "", phone = "") {
+            const container = document.getElementById("dynamicStaffContainer");
+            
+            const div = document.createElement("div");
+            div.className = "flex items-center gap-3 staff-row bg-gray-800 p-2 rounded-lg border border-gray-600 shadow-inner";
+            
+            // تفريغ النص للهروب من الأخطاء (Security Check)
+            const safeName = String(name ?? "").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+            const safePhone = String(phone ?? "").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+            
+            div.innerHTML = `
+                <div class="flex-1 relative">
+                    <i class="fas fa-user absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+                    <input type="text" placeholder="اسم الموظف" value="${safeName}" class="staff-name w-full pr-9 pl-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white outline-none focus:border-blue-500 transition">
+                </div>
+                
+                <div class="flex-1 relative">
+                    <i class="fas fa-phone absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+                    <input type="text" placeholder="رقم الهاتف" value="${safePhone}" class="staff-phone w-full pr-9 pl-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white outline-none focus:border-blue-500 transition" dir="ltr">
+                </div>
+                
+                <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-white hover:bg-red-600 p-2 rounded-lg transition" title="حذف الموظف">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            `;
+            
+            container.appendChild(div);
+        }
+        
+        // إتاحة الدالة عالمياً لاستخدامها من الجافاسكريبت الموديول
+        window.addStaffField = addStaffField;
+        
+        // إضافة حقل فارغ مبدئياً عند تحميل الصفحة
+        document.addEventListener("DOMContentLoaded", () => { 
+            addStaffField(); 
+        });
+
     </script>
     
+    <!-- استدعاء ملف البرمجة الأساسي (Firebase & Logic) -->
     <script type="module" src="admin.js"></script>
+    
 </body>
 </html>
