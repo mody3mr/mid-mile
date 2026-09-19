@@ -32,13 +32,19 @@ let barcodeToProductMap = new Map();
 let trucksList = [];
 let branchMappingsMap = new Map(); 
 let currentSheetData = []; 
-let processedOrdersToUpload = []; // لتخزين الأوردرات بعد التقسيم وقبل الرفع النهائي
+let processedOrdersToUpload = [];
 
 // --------------------------------------------------
-// دوال مساعدة للواجهة
+// دوال مساعدة للواجهة وتنظيف البيانات
 // --------------------------------------------------
 function getElement(id) { return document.getElementById(id); }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+
+// دالة لتنظيف اسم الفرع من الأقواس والأرقام الزائدة مثل (1), (2)
+function cleanBranchName(name) {
+    if (!name) return "";
+    return String(name).replace(/\s*\(\d+\)\s*$/g, '').trim();
+}
 
 function showToast(message, type = "error") {
     const toast = getElement("toastNotification");
@@ -274,7 +280,6 @@ onSnapshot(branchMappingsRef, (snapshot) => {
     snapshot.forEach(docSnap => { branchMappingsMap.set(docSnap.id, docSnap.data()); });
 });
 
-// سحب من Odoo (زرار تجريبي لطلب الطريقة)
 getElement("odooFetchBtn")?.addEventListener("click", () => {
     window.UI.openModal(
         "سحب الأوردرات من Odoo", 
@@ -287,7 +292,6 @@ getElement("odooFetchBtn")?.addEventListener("click", () => {
     );
 });
 
-// قراءة ملف الإكسيل
 getElement("excelFileInput")?.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -316,7 +320,7 @@ getElement("excelFileInput")?.addEventListener("change", (e) => {
 
 function setupMappingWizard(data) {
     getElement("uploadPromptContainer").classList.add("hidden");
-    getElement("groupedOrdersContainer").classList.add("hidden"); // إخفاء العرض القديم لو موجود
+    getElement("groupedOrdersContainer").classList.add("hidden"); 
     getElement("sheetMappingWizard").classList.remove("hidden");
 
     let uniqueBranches = new Set();
@@ -325,7 +329,8 @@ function setupMappingWizard(data) {
     data.forEach(row => {
         const branchRaw = row['Stock Moves/Destination Location'];
         const categoryRaw = row['Stock Moves/Internal Type'];
-        if(branchRaw !== undefined) uniqueBranches.add(String(branchRaw).trim());
+        // تنظيف اسم الفرع من البداية لتجنب التكرارات
+        if(branchRaw !== undefined) uniqueBranches.add(cleanBranchName(branchRaw));
         if(categoryRaw !== undefined) uniqueCategories.add(String(categoryRaw).trim());
     });
 
@@ -386,7 +391,6 @@ function setupMappingWizard(data) {
     });
 }
 
-// معالجة الشيت وعرض الأوردرات المجمعة
 getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     const btn = e.target;
     const newBranchRows = document.querySelectorAll('.new-branch-row');
@@ -417,19 +421,18 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     setBusy(btn, true, "جاري المعالجة...");
 
     try {
-        // حفظ التعيينات الجديدة
         for (const mapping of newMappingsToSave) {
             await setDoc(doc(db, "branchMappings", mapping.id), mapping.data);
             branchMappingsMap.set(mapping.id, mapping.data);
         }
 
         processedOrdersToUpload = [];
-        let groupedData = {}; // الهيكل: { branchName: { car: "...", categories: { catName: [ products ] } } }
+        let groupedData = {}; 
 
         currentSheetData.forEach(row => {
             const branchRaw = row['Stock Moves/Destination Location'];
             const categoryRaw = row['Stock Moves/Internal Type'];
-            const branch = branchRaw !== undefined ? String(branchRaw).trim() : "";
+            const branch = branchRaw !== undefined ? cleanBranchName(branchRaw) : "";
             const category = categoryRaw !== undefined ? String(categoryRaw).trim() : "";
             const branchId = branch.replace(/[\/\.#$\[\]]/g, '_');
 
@@ -449,7 +452,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
                 car: mapping.car
             };
 
-            // تجميع الداتا للعرض
             if (!groupedData[branch]) {
                 groupedData[branch] = { car: mapping.car, categories: {} };
             }
@@ -458,7 +460,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
             }
             groupedData[branch].categories[productObj.category].push(productObj);
 
-            // حفظ الداتا للرفع النهائي
             processedOrdersToUpload.push(productObj);
         });
 
@@ -472,7 +473,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     finally { setBusy(btn, false); }
 });
 
-// دالة عرض الداتا بشكل Accordion
 function renderGroupedOrders(groupedData) {
     const container = getElement("branchesAccordionContainer");
     container.innerHTML = "";
@@ -536,7 +536,6 @@ function renderGroupedOrders(groupedData) {
     }
 }
 
-// زر الاعتماد النهائي والرفع للفايربيس
 getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => {
     if (processedOrdersToUpload.length === 0) return showToast("لا توجد أوردرات للرفع");
     
@@ -567,7 +566,6 @@ getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => 
 
         showToast(`تم رفع واعتماد ${totalUploaded} منتج بنجاح!`, "success");
         
-        // إعادة تهيئة الواجهة
         getElement("groupedOrdersContainer").classList.add("hidden");
         getElement("uploadPromptContainer").classList.remove("hidden");
         processedOrdersToUpload = [];
@@ -580,9 +578,8 @@ getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => 
     }
 });
 
-
 // --------------------------------------------------
-// 4. إدارة الأوردرات المعلقة (البحث والمتابعة اليدوية)
+// 4. إدارة الأوردرات المعلقة
 // --------------------------------------------------
 const barcodeInput = getElement("newOrderBarcode");
 const productInput = getElement("newOrderProduct");
