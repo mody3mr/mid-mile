@@ -407,23 +407,46 @@
                 
                 <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 mb-6 shadow-lg">
                     <h3 class="text-lg font-bold mb-4">إنشاء أوردر معلق (مرفوض / مرتجع) لمندوب</h3>
-                    <form id="orderForm" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    
+                    <!-- فورم الإنشاء الجديد المتسلسل -->
+                    <form id="orderForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         
-                        <input type="text" id="newOrderBarcode" placeholder="الباركود" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                        <input type="text" id="newOrderProduct" placeholder="اسم المنتج (تلقائي)" readonly class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">1. المندوب (HRID)</label>
+                            <input list="repsDataList" id="newOrderHrid" placeholder="ابحث باسم المندوب أو HRID" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
+                            <datalist id="repsDataList"></datalist>
+                        </div>
                         
-                        <input list="repsDataList" id="newOrderHrid" placeholder="ابحث باسم المندوب أو HRID" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                        <datalist id="repsDataList"></datalist>
-                        
-                        <select id="newOrderBranch" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
-                            <option value="">أدخل الباركود والمندوب أولاً...</option>
-                        </select>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">2. الفرع</label>
+                            <select id="newOrderBranch" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
+                                <option value="">أدخل المندوب أولاً...</option>
+                            </select>
+                        </div>
 
-                        <input type="text" id="newOrderNotes" placeholder="سبب التعليق (تالف، الخ..)" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500 md:col-span-1">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">3. المنتج</label>
+                            <select id="newOrderProduct" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
+                                <option value="">أدخل الفرع أولاً...</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">الباركود (تلقائي)</label>
+                            <input type="text" id="newOrderBarcode" placeholder="سيظهر تلقائياً" readonly required class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">سبب التعليق</label>
+                            <input type="text" id="newOrderNotes" placeholder="مرفوض، تالف، الخ..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-orange-500">
+                        </div>
                         
-                        <button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold md:col-span-1">
-                            حفظ كمعلق
-                        </button>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg transition">
+                                حفظ كمعلق
+                            </button>
+                        </div>
+
                     </form>
                 </div>
                 
