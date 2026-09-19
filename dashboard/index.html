@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الإدارة - نظام المناديب</title>
+    <link rel="manifest" href="../manifest.json">
+    <meta name="theme-color" content="#111827">
+    <link rel="icon" href="../breadfast-logo (1).png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: { colors: { brand: { 500: '#3b82f6', 600: '#2563eb' } } }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
+
+    <div id="toastNotification" class="fixed top-4 left-1/2 -translate-x-1/2 transition-all duration-300 opacity-0 -translate-y-4 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]" role="status" aria-live="polite">
+        <i id="toastIcon" class="fas"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- الهيدر -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-40">
+        <div class="flex items-center gap-3">
+            <button id="menuToggle" type="button" class="md:hidden text-gray-300 hover:text-white transition" aria-label="فتح القائمة">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+            <div class="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center font-bold text-white shadow-lg">
+                <i class="fas fa-user-shield"></i>
+            </div>
+            <span class="font-bold text-lg hidden sm:block">لوحة تحكم الإدارة</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="window.location.href='../index.html'" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition">
+                العودة لتسجيل الدخول
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- القائمة الجانبية (التابات) -->
+        <div id="sidebarBackdrop" class="hidden fixed inset-0 bg-black/60 z-20 md:hidden"></div>
+        <aside id="adminSidebar" class="w-64 bg-gray-800 border-l border-gray-700 flex flex-col p-4 space-y-2 fixed md:relative inset-y-0 right-0 z-30 h-[calc(100vh-73px)] md:h-auto transform translate-x-full md:translate-x-0 transition-transform duration-300">
+            <button onclick="switchTab('employeesTab')" id="btn-employeesTab" class="tab-btn w-full flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg transition">
+                <i class="fas fa-users"></i> إدارة الموظفين
+            </button>
+            <button onclick="switchTab('ordersTab')" id="btn-ordersTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-box-open"></i> إدارة الأوردرات
+            </button>
+            <button onclick="switchTab('systemTab')" id="btn-systemTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-cogs"></i> إشعارات وتحكم النظام
+            </button>
+        </aside>
+
+        <!-- المحتوى الرئيسي -->
+        <main class="flex-1 overflow-y-auto p-6 bg-gray-900">
+            
+            <!-- تاب الموظفين -->
+            <section id="employeesTab" class="tab-content block">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">الموظفين</h2>
+                    <button id="toggleEmployeeFormBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" type="button">
+                        <i class="fas fa-plus"></i> إضافة موظف
+                    </button>
+                </div>
+                <!-- فورم إضافة موظف سريع (مخفي مبدئياً، يمكن إظهاره بـ JS لاحقاً) -->
+                <div id="employeeFormPanel" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
+                    <h3 class="text-lg font-bold mb-4">تسجيل مندوب جديد</h3>
+                    <form id="employeeForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input type="text" id="newEmpName" placeholder="اسم المندوب" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <input type="text" id="newEmpHrid" placeholder="HRID" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold">حفظ الموظف</button>
+                    </form>
+                </div>
+                <!-- جدول الموظفين -->
+                <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-700 text-gray-300">
+                            <tr>
+                                <th class="p-4">الاسم</th>
+                                <th class="p-4">HRID</th>
+                                <th class="p-4">رقم الـ PIN</th>
+                                <th class="p-4">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employeesTableBody" class="divide-y divide-gray-700">
+                            <!-- سيتم التعبئة من الجافاسكريبت -->
+                            <tr><td colspan="4" class="p-4 text-center text-gray-500">جاري تحميل الموظفين...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- تاب الأوردرات -->
+            <section id="ordersTab" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">الأوردرات المتعلقة</h2>
+                    <input id="ordersImportInput" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="hidden">
+                    <button id="ordersImportBtn" type="button" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                        <i class="fas fa-file-excel"></i> استيراد من شيت
+                    </button>
+                </div>
+                <!-- أداة تحكم في حالة أوردر تجريبي -->
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
+                    <h3 class="text-lg font-bold mb-4">إنشاء أوردر جديد (Draft)</h3>
+                    <form id="orderForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" id="newOrderProduct" placeholder="اسم المنتج" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <input type="text" id="newOrderBarcode" placeholder="الباركود" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <input type="text" id="newOrderHrid" placeholder="HRID الخاص بالمندوب" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold">إنشاء كمسودة</button>
+                    </form>
+                </div>
+                <!-- عرض الأوردرات والتحكم في حالتها -->
+                <div class="flex flex-col md:flex-row gap-3 mb-4">
+                    <input id="adminOrderSearch" type="search" placeholder="بحث بالمنتج أو الباركود أو HRID" class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                    <select id="adminOrderFilter" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white">
+                        <option value="all">كل الحالات</option>
+                        <option value="Draft">مسودة</option>
+                        <option value="Waiting">انتظار</option>
+                        <option value="Ready">جاهز</option>
+                        <option value="Done">تم التسليم</option>
+                        <option value="Rejected">مرفوض</option>
+                    </select>
+                </div>
+                <div id="adminOrdersContainer" class="space-y-4">
+                    <!-- سيتم التعبئة بـ JS -->
+                    <div class="text-center text-gray-500 py-8">جاري جلب الأوردرات...</div>
+                </div>
+            </section>
+
+            <!-- تاب تحكم النظام والإشعارات -->
+            <section id="systemTab" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-6">الإشعارات والتحكم</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- الإشعارات الجماعية -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-blue-400">
+                            <i class="fas fa-bell"></i> إرسال إشعار للكل
+                        </h3>
+                        <p class="text-sm text-gray-400 mb-4">سيظهر هذا الإشعار لجميع المناديب في لوحة التحكم الخاصة بهم. (مثال: تم إضافة سيارة جديدة لك).</p>
+                        <textarea id="globalNotificationText" rows="3" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-4" placeholder="اكتب نص الإشعار هنا..."></textarea>
+                        <button onclick="sendGlobalNotification()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold">
+                            إرسال الإشعار
+                        </button>
+                    </div>
+
+                    <!-- إخراج الجميع -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-red-900/50">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-red-500">
+                            <i class="fas fa-sign-out-alt"></i> إخراج جميع الحسابات
+                        </h3>
+                        <p class="text-sm text-gray-400 mb-4">بالضغط على هذا الزر، سيتم إجبار جميع المناديب على تسجيل الخروج من النظام فوراً وسيطلب منهم تسجيل الدخول بالـ PIN مرة أخرى.</p>
+                        <button onclick="forceLogoutAll()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold mt-6">
+                            تسجيل خروج الجميع (Force Logout)
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- الفوتر -->
+    <footer class="p-4 bg-gray-800 border-t border-gray-700 text-center text-sm text-gray-400 z-40">
+        لوحة الإدارة - تم الإنشاء بواسطة <a href="https://wa.me/201094264296" target="_blank" class="text-blue-400 hover:underline font-medium">محمد عمرو ابراهيم</a>
+    </footer>
+
+    <!-- سكربت التحكم في التابات -->
+    <script>
+        const adminSidebar = document.getElementById('adminSidebar');
+        const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+        const menuToggle = document.getElementById('menuToggle');
+
+        function setSidebarOpen(isOpen) {
+            adminSidebar.classList.toggle('translate-x-full', !isOpen);
+            sidebarBackdrop.classList.toggle('hidden', !isOpen);
+        }
+
+        menuToggle?.addEventListener('click', () => {
+            setSidebarOpen(adminSidebar.classList.contains('translate-x-full'));
+        });
+        sidebarBackdrop?.addEventListener('click', () => setSidebarOpen(false));
+
+        function switchTab(tabId) {
+            // إخفاء كل المحتوى
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+                tab.classList.remove('block');
+            });
+            // إظهار المحتوى المطلوب
+            const selectedTab = document.getElementById(tabId);
+            selectedTab.classList.remove('hidden');
+            selectedTab.classList.add('block');
+
+            // إعادة ضبط ألوان الأزرار الجانبية
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
+            });
+            // تلوين الزر النشط
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
+            activeBtn.classList.add('bg-blue-600', 'text-white');
+            setSidebarOpen(false);
+        }
+    </script>
+    
+    <!-- سيتم ربط سكريبت الأدمن هنا -->
+    <script type="module" src="admin.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('../sw.js'));
+        }
+    </script>
+</body>
+</html>
