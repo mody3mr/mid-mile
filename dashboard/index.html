@@ -27,6 +27,18 @@
     <style>
         /* إخفاء سهم القائمة المنسدلة الافتراضي في حقول البحث Datalist */
         input[list]::-webkit-calendar-picker-indicator { display: none !important; }
+        
+        /* تنسيقات للقوائم المنسدلة بتاعة الفروع والكاتيجوري */
+        .accordion-content {
+            transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+            max-height: 0;
+            overflow: hidden;
+        }
+        .accordion-content.open {
+            max-height: 5000px; /* رقم كبير يسمح بفتح المحتوى */
+        }
+        .chevron { transition: transform 0.3s ease; }
+        .chevron.open { transform: rotate(180deg); }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans">
@@ -182,7 +194,7 @@
             </section>
 
             <!-- 4. تاب إدارة المناديب -->
-            <section id="employeesTab" class="tab-content block">
+            <section id="employeesTab" class="tab-content hidden">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">إدارة المناديب</h2>
                     <button id="toggleEmployeeFormBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" type="button">
@@ -196,7 +208,6 @@
                         <input type="text" id="newEmpHrid" placeholder="HRID" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         <input type="text" id="newEmpMobile" placeholder="رقم الموبايل" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         
-                        <!-- قوائم التيم والعربية المنسدلة -->
                         <select id="newEmpTeam" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                             <option value="">اختر التيم...</option>
                         </select>
@@ -227,29 +238,35 @@
                 </div>
             </section>
 
-            <!-- 5. تاب إدارة الأوردرات (رفع شيت الإكسيل وتقسيم العربيات) -->
-            <section id="orderManageTab" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-6">
+            <!-- 5. تاب إدارة الأوردرات (الأساسية للشغل الثقيل) -->
+            <section id="orderManageTab" class="tab-content block">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                     <h2 class="text-2xl font-bold">إدارة الأوردرات والتوزيع</h2>
-                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
-                    <button id="manualUploadBtn" onclick="document.getElementById('excelFileInput').click()" type="button" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg">
-                        <i class="fas fa-upload"></i> رفع شيت الأوردرات
-                    </button>
+                    <div class="flex gap-3 w-full md:w-auto">
+                        <!-- زر الاستيراد اليدوي -->
+                        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
+                        <button id="manualUploadBtn" onclick="document.getElementById('excelFileInput').click()" type="button" class="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-bold shadow-lg transition">
+                            <i class="fas fa-file-upload"></i> استيراد من شيت
+                        </button>
+                        <!-- زر السحب من أودو -->
+                        <button id="odooFetchBtn" type="button" class="flex-1 md:flex-none bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-bold shadow-lg transition">
+                            <i class="fas fa-cloud-download-alt"></i> سحب من Odoo
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- رسالة التوجيه المبدئية -->
                 <div id="uploadPromptContainer" class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
                     <div class="text-gray-500 py-10">
-                        <i class="fas fa-file-excel text-5xl mb-4 opacity-50"></i>
-                        <p class="text-lg">قم برفع شيت الإكسيل (Transfer stock.picking) لبدء التقسيم والتوزيع.</p>
+                        <i class="fas fa-boxes text-5xl mb-4 opacity-50"></i>
+                        <p class="text-lg">قم برفع شيت الإكسيل أو السحب من أودو لعرض وتوزيع أوردرات اليوم.</p>
                     </div>
                 </div>
 
-                <!-- لوحة التقسيم (تظهر بعد رفع الشيت) -->
+                <!-- لوحة تقسيم الفروع قبل العرض (تظهر بعد الرفع) -->
                 <div id="sheetMappingWizard" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
                     <h3 class="text-xl font-bold mb-4 text-blue-400 border-b border-gray-700 pb-3"><i class="fas fa-cogs ml-2"></i> إعداد وتقسيم فروع الشيت</h3>
                     
-                    <!-- 1. الفروع الجديدة (يجب تعيينها أو تجاهلها) -->
                     <div class="mb-6">
                         <h4 class="font-bold mb-3 text-red-400 flex items-center gap-2">
                             <i class="fas fa-exclamation-triangle"></i> فروع جديدة (تحتاج لتعيين)
@@ -264,14 +281,11 @@
                                         <th class="p-3 w-1/3">أو تجاهل الفرع (السبب)</th>
                                     </tr>
                                 </thead>
-                                <tbody id="newBranchesTableBody" class="divide-y divide-gray-700">
-                                    <!-- يتم إضافتها بالـ JS -->
-                                </tbody>
+                                <tbody id="newBranchesTableBody" class="divide-y divide-gray-700"></tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- 2. الفروع المحفوظة مسبقاً (للمراجعة) -->
                     <div class="mb-6">
                         <h4 class="font-bold mb-3 text-green-400 flex items-center gap-2 cursor-pointer" onclick="document.getElementById('savedBranchesContainer').classList.toggle('hidden')">
                             <i class="fas fa-check-circle"></i> فروع مسجلة مسبقاً (اضغط للعرض/الإخفاء)
@@ -286,44 +300,50 @@
                                         <th class="p-3">الحالة</th>
                                     </tr>
                                 </thead>
-                                <tbody id="savedBranchesTableBody" class="divide-y divide-gray-700">
-                                </tbody>
+                                <tbody id="savedBranchesTableBody" class="divide-y divide-gray-700"></tbody>
                             </table>
                         </div>
                     </div>
 
-                    <!-- 3. استبعاد الكاتيجوري -->
                     <div class="mb-6 border-t border-gray-700 pt-4">
                         <h4 class="font-bold mb-3 text-yellow-400 flex items-center gap-2">
                             <i class="fas fa-filter"></i> استبعاد أقسام (Categories) من التحضير
                         </h4>
-                        <p class="text-sm text-gray-400 mb-3">حدد الأقسام التي لا ترغب في إرسالها للمناديب اليوم:</p>
-                        <div id="categoriesContainer" class="flex flex-wrap gap-3">
-                            <!-- Checkboxes يتم إضافتها بالـ JS -->
-                        </div>
+                        <div id="categoriesContainer" class="flex flex-wrap gap-3"></div>
                     </div>
 
                     <button id="processSheetBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-lg text-lg mt-4 transition">
-                        حفظ الإعدادات وتوزيع المنتجات على المناديب
+                        حفظ الإعدادات وعرض أوردرات اليوم
                     </button>
+                </div>
+
+                <!-- حاوية العرض المجمعة (الفروع -> الكاتيجوري -> المنتجات) تظهر هنا بعد معالجة الشيت -->
+                <div id="groupedOrdersContainer" class="hidden mt-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-3">
+                        <h3 class="text-xl font-bold text-white"><i class="fas fa-list-ul ml-2"></i> أوردرات اليوم (مجمعة بالفروع)</h3>
+                        <!-- زر لرفع الأوردرات النهائية لقاعدة البيانات بعد مراجعتها -->
+                        <button id="confirmAndUploadOrdersBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg hidden">
+                            <i class="fas fa-check-double ml-1"></i> اعتماد الأوردرات للمناديب
+                        </button>
+                    </div>
+                    
+                    <!-- سيتم إضافة الفروع والكاتيجوري هنا بواسطة الجافاسكريبت (Accordion) -->
+                    <div id="branchesAccordionContainer" class="space-y-4"></div>
                 </div>
             </section>
 
-            <!-- 6. تاب الأوردرات المعلقة (الموضحة بالصورة) -->
+            <!-- 6. تاب الأوردرات المعلقة (للبحث الفردي والتعديل اليدوي السريع) -->
             <section id="pendingOrdersTab" class="tab-content hidden">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold">الأوردرات المعلقة</h2>
+                    <h2 class="text-2xl font-bold">الأوردرات المعلقة والبحث</h2>
                 </div>
                 <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
-                    <h3 class="text-lg font-bold mb-4">إنشاء أوردر جديد (Draft)</h3>
+                    <h3 class="text-lg font-bold mb-4">إنشاء أوردر جديد يدوياً (Draft)</h3>
                     <form id="orderForm" class="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <input type="text" id="newOrderBarcode" placeholder="الباركود" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         <input type="text" id="newOrderProduct" placeholder="اسم المنتج (تلقائي)" readonly class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed">
-                        
-                        <!-- بحث ذكي للمناديب -->
                         <input list="repsDataList" id="newOrderHrid" placeholder="ابحث باسم المندوب أو HRID" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         <datalist id="repsDataList"></datalist>
-
                         <input type="text" id="newOrderNotes" placeholder="ملاحظات الأوردر" class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold">إنشاء كمسودة</button>
                     </form>
@@ -352,31 +372,25 @@
                         <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-blue-400">
                             <i class="fas fa-paper-plane"></i> إرسال إشعار
                         </h3>
-                        
                         <select id="notificationTargetType" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-3 outline-none focus:border-blue-500" onchange="toggleNotificationInput()">
                             <option value="all">إرسال لكل المسجلين</option>
                             <option value="rep">إرسال لمندوب محدد</option>
                             <option value="team">إرسال لتيم معين</option>
                             <option value="car">إرسال لعربية معينة</option>
                         </select>
-                        
-                        <!-- الحاويات الذكية للخيارات (تظهر وتختفي حسب الاختيار) -->
                         <div id="targetRepContainer" class="hidden mb-3">
                             <input list="repsDataList" id="targetRepValue" placeholder="ابحث واختر المندوب..." class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         </div>
-                        
                         <div id="targetTeamContainer" class="hidden mb-3">
                             <select id="targetTeamValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                                 <option value="">اختر التيم...</option>
                             </select>
                         </div>
-
                         <div id="targetCarContainer" class="hidden mb-3">
                             <select id="targetCarValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                                 <option value="">اختر العربية...</option>
                             </select>
                         </div>
-
                         <textarea id="globalNotificationText" rows="3" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-4 outline-none focus:border-blue-500" placeholder="اكتب نص الإشعار هنا..."></textarea>
                         <button onclick="sendNotification()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow">
                             إرسال الإشعار
@@ -533,6 +547,23 @@
                 "bg-red-600 hover:bg-red-700",
                 () => { if(window.forceLogoutAll) window.forceLogoutAll(); }
             );
+        }
+
+        // دالة لفتح وقفل الأكورديون
+        function toggleAccordion(headerElement) {
+            const content = headerElement.nextElementSibling;
+            const chevron = headerElement.querySelector('.chevron');
+            
+            if (content.classList.contains('open')) {
+                content.classList.remove('open');
+                content.classList.add('p-0', 'border-0');
+                content.classList.remove('p-4', 'border-t');
+                chevron.classList.remove('open');
+            } else {
+                content.classList.add('open', 'p-4', 'border-t', 'border-gray-700');
+                content.classList.remove('p-0', 'border-0');
+                chevron.classList.add('open');
+            }
         }
     </script>
     
