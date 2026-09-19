@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
-    addDoc, collection, doc, getFirestore, getDocs, deleteDoc, 
+    addDoc, collection, doc, getFirestore, getDoc, deleteDoc, 
     onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -30,8 +30,8 @@ const notificationsRef = collection(db, "notifications");
 let allOrders = [];
 let barcodeToProductMap = new Map(); 
 let trucksList = [];
-let branchMappingsMap = new Map(); // الخريطة المحفوظة للفروع
-let currentSheetData = []; // بيانات الشيت المرفوع حالياً
+let branchMappingsMap = new Map(); 
+let currentSheetData = []; 
 
 // --------------------------------------------------
 // دوال مساعدة للواجهة
@@ -88,7 +88,7 @@ function formatDate(value) {
 }
 
 // --------------------------------------------------
-// 1. إدارة الفرق (Teams) و الشاحنات (Cars)
+// 1. إدارة الفرق والشاحنات
 // --------------------------------------------------
 getElement("teamForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -109,7 +109,7 @@ onSnapshot(teamsRef, (snapshot) => {
     if (tbody) tbody.innerHTML = "";
     let optionsHtml = '<option value="">اختر التيم...</option>';
 
-    if(snapshot.empty && tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center">لا توجد فرق</td></tr>';
+    if(snapshot.empty && tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center">لا توجد فرق مسجلة</td></tr>';
     snapshot.forEach(docSnap => {
         const teamName = escapeHtml(docSnap.data().name);
         optionsHtml += `<option value="${teamName}">${teamName}</option>`;
@@ -184,6 +184,7 @@ onSnapshot(usersRef, (snapshot) => {
         const user = docSnap.data();
         const hrid = docSnap.id;
         totalReps++;
+        
         if (repsDataList) repsDataList.innerHTML += `<option value="${hrid}">${user.name}</option>`;
 
         if (!tbody) return;
@@ -197,9 +198,9 @@ onSnapshot(usersRef, (snapshot) => {
                 <td class="p-4 text-yellow-400 font-bold">${escapeHtml(user.car || 'غير محدد')}</td>
                 <td class="p-4 text-center tracking-widest">${user.pinCode || '-'}</td>
                 <td class="p-4 text-center">
-                    <button onclick="resetPin('${hrid}')" class="text-xs bg-red-900/50 text-red-400 px-2 py-1 rounded"><i class="fas fa-key"></i></button>
-                    <button onclick="openEditEmployeeModal('${hrid}', '${escapeHtml(user.name)}', '${escapeHtml(user.mobile)}', '${escapeHtml(user.team)}', '${escapeHtml(user.car || '')}')" class="text-xs bg-blue-900/50 text-blue-400 px-2 py-1 rounded"><i class="fas fa-edit"></i></button>
-                    <button onclick="toggleEmployeeStatus('${hrid}', '${user.status}')" class="text-xs ${isSuspended ? 'bg-green-900/50 text-green-400' : 'bg-orange-900/50 text-orange-400'} px-2 py-1 rounded"><i class="fas ${isSuspended ? 'fa-user-check' : 'fa-user-slash'}"></i></button>
+                    <button onclick="resetPin('${hrid}')" class="text-xs bg-red-900/50 text-red-400 px-2 py-1 rounded mb-1"><i class="fas fa-key"></i></button>
+                    <button onclick="openEditEmployeeModal('${hrid}', '${escapeHtml(user.name)}', '${escapeHtml(user.mobile)}', '${escapeHtml(user.team)}', '${escapeHtml(user.car || '')}')" class="text-xs bg-blue-900/50 text-blue-400 px-2 py-1 rounded mb-1"><i class="fas fa-edit"></i></button>
+                    <button onclick="toggleEmployeeStatus('${hrid}', '${user.status}')" class="text-xs ${isSuspended ? 'bg-green-900/50 text-green-400' : 'bg-orange-900/50 text-orange-400'} px-2 py-1 rounded mb-1"><i class="fas ${isSuspended ? 'fa-user-check' : 'fa-user-slash'}"></i></button>
                 </td>
             </tr>
         `;
@@ -265,15 +266,11 @@ window.resetPin = (hrid) => {
 };
 
 // --------------------------------------------------
-// 3. إدارة الأوردرات (الرفع الأوتوماتيكي والتقسيم)
+// 3. إدارة الأوردرات (رفع وتوزيع أوتوماتيكي من الإكسيل)
 // --------------------------------------------------
-
-// جلب التعيينات المحفوظة للفروع من الفايربيس
 onSnapshot(branchMappingsRef, (snapshot) => {
     branchMappingsMap.clear();
-    snapshot.forEach(docSnap => {
-        branchMappingsMap.set(docSnap.id, docSnap.data());
-    });
+    snapshot.forEach(docSnap => { branchMappingsMap.set(docSnap.id, docSnap.data()); });
 });
 
 getElement("excelFileInput")?.addEventListener("change", (e) => {
@@ -282,18 +279,22 @@ getElement("excelFileInput")?.addEventListener("change", (e) => {
     
     const reader = new FileReader();
     reader.onload = (evt) => {
-        const data = evt.target.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        currentSheetData = XLSX.utils.sheet_to_json(worksheet);
-        
-        if(currentSheetData.length > 0) {
-            setupMappingWizard(currentSheetData);
-        } else {
-            showToast("الشيت فارغ أو غير صالح");
+        try {
+            const data = evt.target.result;
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            currentSheetData = XLSX.utils.sheet_to_json(worksheet);
+            
+            if(currentSheetData.length > 0) {
+                setupMappingWizard(currentSheetData);
+            } else {
+                showToast("الشيت فارغ أو غير صالح");
+            }
+        } catch(error) {
+            showToast("خطأ في قراءة ملف الإكسيل");
         }
-        e.target.value = ""; // تصفير الـ input
+        e.target.value = ""; 
     };
     reader.readAsArrayBuffer(file);
 });
@@ -306,33 +307,27 @@ function setupMappingWizard(data) {
     let uniqueCategories = new Set();
 
     data.forEach(row => {
-        const branch = row['Stock Moves/Destination Location'];
-        const category = row['Stock Moves/Internal Type'];
-        if(branch) uniqueBranches.add(branch.trim());
-        if(category) uniqueCategories.add(category.trim());
+        const branchRaw = row['Stock Moves/Destination Location'];
+        const categoryRaw = row['Stock Moves/Internal Type'];
+        // معالجة الأرقام وتحويلها لنصوص لتجنب الكراش
+        if(branchRaw !== undefined) uniqueBranches.add(String(branchRaw).trim());
+        if(categoryRaw !== undefined) uniqueCategories.add(String(categoryRaw).trim());
     });
 
     const newBranchesBody = getElement("newBranchesTableBody");
     const savedBranchesBody = getElement("savedBranchesTableBody");
     const categoriesContainer = getElement("categoriesContainer");
     
-    newBranchesBody.innerHTML = "";
-    savedBranchesBody.innerHTML = "";
-    categoriesContainer.innerHTML = "";
+    newBranchesBody.innerHTML = ""; savedBranchesBody.innerHTML = ""; categoriesContainer.innerHTML = "";
+    let newCount = 0, savedCount = 0;
 
-    let newCount = 0;
-    let savedCount = 0;
-
-    // تجهيز دروب داون العربيات للـ Select
     let carOptions = `<option value="">-- اختر العربية --</option>`;
     trucksList.forEach(car => { carOptions += `<option value="${escapeHtml(car)}">${escapeHtml(car)}</option>`; });
 
     uniqueBranches.forEach(branch => {
-        // الـ ID في فايربيس ما ينفعش يكون فيه سلاش، بنعمله Sanitize
         const branchId = branch.replace(/[\/\.#$\[\]]/g, '_'); 
         
         if (branchMappingsMap.has(branchId)) {
-            // فرع محفوظ مسبقاً
             savedCount++;
             const mapping = branchMappingsMap.get(branchId);
             const statusHtml = mapping.ignored 
@@ -341,13 +336,10 @@ function setupMappingWizard(data) {
                 
             savedBranchesBody.innerHTML += `
                 <tr class="hover:bg-gray-700/50">
-                    <td class="p-3">${escapeHtml(branch)}</td>
-                    <td class="p-3">${mapping.ignored ? '-' : escapeHtml(mapping.car)}</td>
-                    <td class="p-3">${statusHtml}</td>
+                    <td class="p-3">${escapeHtml(branch)}</td><td class="p-3">${mapping.ignored ? '-' : escapeHtml(mapping.car)}</td><td class="p-3">${statusHtml}</td>
                 </tr>
             `;
         } else {
-            // فرع جديد محتاج تعيين
             newCount++;
             newBranchesBody.innerHTML += `
                 <tr class="hover:bg-gray-700/50 new-branch-row" data-branch="${escapeHtml(branch)}" data-branch-id="${escapeHtml(branchId)}">
@@ -365,14 +357,10 @@ function setupMappingWizard(data) {
         }
     });
 
-    if (newCount === 0) {
-        newBranchesBody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-green-400 font-bold"><i class="fas fa-check-circle"></i> جميع الفروع في هذا الشيت معرفة مسبقاً</td></tr>';
-    }
-
+    if (newCount === 0) newBranchesBody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-green-400 font-bold"><i class="fas fa-check-circle"></i> الفروع معرفة مسبقاً</td></tr>';
     getElement("newBranchesCount").textContent = newCount;
     getElement("savedBranchesCount").textContent = savedCount;
 
-    // كاتيجوريز (لتجاهل اقسام معينة)
     uniqueCategories.forEach(cat => {
         categoriesContainer.innerHTML += `
             <label class="flex items-center gap-2 bg-gray-900 px-3 py-2 rounded border border-gray-600 cursor-pointer hover:border-yellow-500 transition">
@@ -383,14 +371,12 @@ function setupMappingWizard(data) {
     });
 }
 
-// زر معالجة الشيت وحفظ الأوردرات
 getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     const btn = e.target;
     const newBranchRows = document.querySelectorAll('.new-branch-row');
     let hasErrors = false;
     let newMappingsToSave = [];
 
-    // 1. التحقق من الفروع الجديدة
     newBranchRows.forEach(row => {
         const branch = row.dataset.branch;
         const branchId = row.dataset.branchId;
@@ -404,48 +390,35 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
             row.classList.remove("border-red-500");
             newMappingsToSave.push({
                 id: branchId,
-                data: {
-                    branchName: branch,
-                    car: car || null,
-                    ignored: !!ignoreReason,
-                    reason: ignoreReason || null,
-                    createdAt: serverTimestamp()
-                }
+                data: { branchName: branch, car: car || null, ignored: !!ignoreReason, reason: ignoreReason || null, createdAt: serverTimestamp() }
             });
         }
     });
 
-    if (hasErrors) return showToast("برجاء تعيين عربية أو كتابة سبب تجاهل لجميع الفروع الجديدة المؤشرة بالأحمر");
+    if (hasErrors) return showToast("برجاء تعيين عربية أو تجاهل لجميع الفروع المؤشرة بالأحمر");
 
-    // 2. تجميع الكاتيجوريز المستبعدة
     const excludedCategories = Array.from(document.querySelectorAll('.category-exclude-checkbox:checked')).map(cb => cb.value);
-
     setBusy(btn, true, "جاري الحفظ والتقسيم...");
 
     try {
-        // حفظ الفروع الجديدة في الفايربيس (عشان تفضل ثابتة)
         for (const mapping of newMappingsToSave) {
             await setDoc(doc(db, "branchMappings", mapping.id), mapping.data);
-            // إضافتها محلياً عشان نستخدمها فوراً في الفلترة
             branchMappingsMap.set(mapping.id, mapping.data);
         }
 
-        // 3. فلترة الشيت وإعداد الأوردرات
         const ordersToUpload = [];
-        
         currentSheetData.forEach(row => {
-            const branch = row['Stock Moves/Destination Location']?.trim();
-            const category = row['Stock Moves/Internal Type']?.trim();
-            const branchId = branch?.replace(/[\/\.#$\[\]]/g, '_');
+            const branchRaw = row['Stock Moves/Destination Location'];
+            const categoryRaw = row['Stock Moves/Internal Type'];
+            const branch = branchRaw !== undefined ? String(branchRaw).trim() : "";
+            const category = categoryRaw !== undefined ? String(categoryRaw).trim() : "";
+            const branchId = branch.replace(/[\/\.#$\[\]]/g, '_');
 
-            // لو الكاتيجوري مستبعد، نتجاهل الصف
             if (excludedCategories.includes(category)) return;
 
-            // لو الفرع متجاهل، نتجاهل الصف
             const mapping = branchMappingsMap.get(branchId);
             if (!mapping || mapping.ignored) return;
 
-            // تجهيز الأوردر وربطه بالعربية
             ordersToUpload.push({
                 productName: row['Stock Moves/Product/Name'] || "بدون اسم",
                 productId: row['Stock Moves/Product/Internal Reference'] || "",
@@ -454,51 +427,105 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
                 category: category || "",
                 orderRef: row['Stock Moves/Reference'] || "",
                 branch: branch,
-                car: mapping.car, // <-- هنا السر: ربطنا الأوردر بالعربية المخصصة للفرع
+                car: mapping.car, 
                 status: "Draft",
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
         });
 
-        // 4. رفع الأوردرات بنظام الباتشات للسرعة
         let batch = writeBatch(db);
-        let count = 0;
-        let totalUploaded = 0;
+        let count = 0, totalUploaded = 0;
 
         for (const order of ordersToUpload) {
-            // تجاهل لو مفيش باركود
             if(!order.barcode) continue; 
-            
-            const newOrderRef = doc(ordersRef);
-            batch.set(newOrderRef, order);
-            count++;
-            totalUploaded++;
-
+            batch.set(doc(ordersRef), order);
+            count++; totalUploaded++;
             if (count === 400) {
                 await batch.commit();
                 batch = writeBatch(db);
                 count = 0;
             }
         }
-        if (count > 0) await batch.commit(); // رفع المتبقي
+        if (count > 0) await batch.commit();
 
         showToast(`تم توزيع ورفع ${totalUploaded} منتج بنجاح!`, "success");
         getElement("sheetMappingWizard").classList.add("hidden");
         getElement("uploadPromptContainer").classList.remove("hidden");
         currentSheetData = [];
 
-    } catch (error) {
-        console.error(error);
-        showToast("حدث خطأ أثناء رفع وتوزيع الأوردرات");
-    } finally {
-        setBusy(btn, false);
+    } catch (error) { showToast("حدث خطأ أثناء الرفع والتوزيع"); } 
+    finally { setBusy(btn, false); }
+});
+
+// --------------------------------------------------
+// 4. إنشاء الأوردرات اليدوية (مسودة) والبحث الذكي بالباركود
+// --------------------------------------------------
+const barcodeInput = getElement("newOrderBarcode");
+const productInput = getElement("newOrderProduct");
+
+if (barcodeInput && productInput) {
+    barcodeInput.addEventListener("input", (e) => {
+        const code = e.target.value.trim();
+        if (barcodeToProductMap.has(code)) {
+            productInput.value = barcodeToProductMap.get(code);
+            productInput.classList.remove("text-gray-300");
+            productInput.classList.add("text-white");
+        } else {
+            productInput.value = "";
+            productInput.classList.add("text-gray-300");
+            productInput.classList.remove("text-white");
+        }
+    });
+}
+
+async function saveDraftOrder(barcode, productName, hrid, notes) {
+    try {
+        let car = "";
+        const userDoc = await getDoc(doc(db, "users", hrid));
+        if (userDoc.exists()) {
+            car = userDoc.data().car || "";
+        }
+
+        await addDoc(ordersRef, { 
+            productName, barcode, hrid, car, // ربط الأوردر بسيارة المندوب
+            notes: notes || "", status: "Draft", 
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp() 
+        });
+        
+        barcodeInput.value = ""; productInput.value = ""; 
+        getElement("newOrderHrid").value = ""; getElement("newOrderNotes").value = "";
+        showToast("تم إنشاء الأوردر بنجاح", "success");
+    } catch (e) { showToast("تعذر إنشاء الأوردر"); }
+}
+
+getElement("orderForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const barcode = barcodeInput.value.trim();
+    let product = productInput.value.trim();
+    const hrid = getElement("newOrderHrid").value.trim();
+    const notes = getElement("newOrderNotes").value.trim();
+
+    if (!barcode || !hrid) return showToast("الباركود والـ HRID مطلوبين");
+    if (!product && barcodeToProductMap.has(barcode)) product = barcodeToProductMap.get(barcode);
+    
+    if (!product) {
+        const html = `
+            <p class="mb-3 text-sm text-gray-300">هذا الباركود غير مسجل مسبقاً، برجاء كتابة اسم المنتج ليتم حفظه:</p>
+            <input type="text" id="modalProductName" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="اسم المنتج هنا...">
+        `;
+        window.UI.openModal("منتج جديد", html, "حفظ الأوردر", "bg-green-600 hover:bg-green-700", async () => {
+            const modalProd = getElement("modalProductName").value.trim();
+            if(!modalProd) return showToast("يجب إدخال اسم المنتج");
+            await saveDraftOrder(barcode, modalProd, hrid, notes);
+        });
+    } else {
+        saveDraftOrder(barcode, product, hrid, notes);
     }
 });
 
-
 // --------------------------------------------------
-// 4. إدارة الأوردرات المعلقة (البحث والمتابعة)
+// 5. متابعة الأوردرات المعلقة
 // --------------------------------------------------
 onSnapshot(ordersRef, (snapshot) => {
     allOrders = snapshot.docs.map((docSnap) => {
@@ -562,6 +589,7 @@ function renderOrders() {
                 <div class="text-sm text-gray-400 mt-1 flex gap-3">
                     <span dir="ltr"><i class="fas fa-barcode"></i> ${escapeHtml(order.barcode)}</span>
                     ${order.branch ? `<span class="text-green-400"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.branch)}</span>` : ''}
+                    ${order.hrid ? `<span class="text-blue-400">للمندوب: ${escapeHtml(order.hrid)}</span>` : ''}
                 </div>
             </div>
             <div class="flex flex-col md:flex-row items-center gap-2">
@@ -582,7 +610,7 @@ async function updateOrderStatus(orderId, newStatus) {
 }
 
 // --------------------------------------------------
-// 5. الإشعارات وخروج الجميع
+// 6. الإشعارات والتحكم بالنظام
 // --------------------------------------------------
 window.sendNotification = async () => {
     const type = getElement("notificationTargetType").value;
@@ -590,14 +618,14 @@ window.sendNotification = async () => {
                  type === 'team' ? getElement("targetTeamValue").value : 
                  type === 'car' ? getElement("targetCarValue").value : "";
     const msg = getElement("globalNotificationText").value.trim();
-    if (!msg || (type !== 'all' && !target)) return showToast("أكمل البيانات");
+    if (!msg || (type !== 'all' && !target)) return showToast("أكمل البيانات المطلوبة");
     const btn = document.querySelector('[onclick="sendNotification()"]');
     setBusy(btn, true, "إرسال...");
     try {
         await addDoc(notificationsRef, { message: msg, type, target, timestamp: serverTimestamp(), readBy: [] });
         if(type==='all') await setDoc(systemRef, { globalMessage: msg, messageTime: Date.now() }, { merge: true });
         getElement("globalNotificationText").value = ""; showToast("تم الإرسال", "success");
-    } catch(e) { showToast("خطأ"); } finally { setBusy(btn, false); }
+    } catch(e) { showToast("خطأ في الإرسال"); } finally { setBusy(btn, false); }
 };
 
 window.forceLogoutAll = async () => {
@@ -605,9 +633,8 @@ window.forceLogoutAll = async () => {
     catch(e) { showToast("خطأ"); }
 };
 
-// فلاتر الأوردرات اليدوية والمعلقة
+// فلاتر وربط الأحداث
 getElement("adminOrderSearch")?.addEventListener("input", renderOrders);
 getElement("adminOrderFilter")?.addEventListener("change", renderOrders);
 getElement("toggleEmployeeFormBtn")?.addEventListener("click", () => getElement("employeeFormPanel")?.classList.toggle("hidden"));
-
 window.updateOrderStatus = updateOrderStatus;
