@@ -32,6 +32,7 @@ let barcodeToProductMap = new Map();
 let trucksList = [];
 let branchMappingsMap = new Map(); 
 let currentSheetData = []; 
+let processedOrdersToUpload = []; // لتخزين الأوردرات بعد التقسيم وقبل الرفع النهائي
 
 // --------------------------------------------------
 // دوال مساعدة للواجهة
@@ -266,13 +267,27 @@ window.resetPin = (hrid) => {
 };
 
 // --------------------------------------------------
-// 3. إدارة الأوردرات (رفع وتوزيع أوتوماتيكي من الإكسيل)
+// 3. إدارة الأوردرات (الرفع، الفلترة، والعرض الهرمي)
 // --------------------------------------------------
 onSnapshot(branchMappingsRef, (snapshot) => {
     branchMappingsMap.clear();
     snapshot.forEach(docSnap => { branchMappingsMap.set(docSnap.id, docSnap.data()); });
 });
 
+// سحب من Odoo (زرار تجريبي لطلب الطريقة)
+getElement("odooFetchBtn")?.addEventListener("click", () => {
+    window.UI.openModal(
+        "سحب الأوردرات من Odoo", 
+        `<div class="text-center">
+            <i class="fas fa-code text-5xl text-purple-500 mb-4"></i>
+            <p class="text-gray-300">هذه الميزة جاهزة للبرمجة.<br>برجاء توفير الطريقة (API Endpoints) الخاصة بـ Odoo أو الـ Script الذي سيقوم بجلب الداتا لنقوم بربطه فوراً.</p>
+        </div>`,
+        "حسناً", 
+        "bg-purple-600"
+    );
+});
+
+// قراءة ملف الإكسيل
 getElement("excelFileInput")?.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -301,6 +316,7 @@ getElement("excelFileInput")?.addEventListener("change", (e) => {
 
 function setupMappingWizard(data) {
     getElement("uploadPromptContainer").classList.add("hidden");
+    getElement("groupedOrdersContainer").classList.add("hidden"); // إخفاء العرض القديم لو موجود
     getElement("sheetMappingWizard").classList.remove("hidden");
 
     let uniqueBranches = new Set();
@@ -309,7 +325,6 @@ function setupMappingWizard(data) {
     data.forEach(row => {
         const branchRaw = row['Stock Moves/Destination Location'];
         const categoryRaw = row['Stock Moves/Internal Type'];
-        // معالجة الأرقام وتحويلها لنصوص لتجنب الكراش
         if(branchRaw !== undefined) uniqueBranches.add(String(branchRaw).trim());
         if(categoryRaw !== undefined) uniqueCategories.add(String(categoryRaw).trim());
     });
@@ -371,6 +386,7 @@ function setupMappingWizard(data) {
     });
 }
 
+// معالجة الشيت وعرض الأوردرات المجمعة
 getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     const btn = e.target;
     const newBranchRows = document.querySelectorAll('.new-branch-row');
@@ -398,15 +414,18 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     if (hasErrors) return showToast("برجاء تعيين عربية أو تجاهل لجميع الفروع المؤشرة بالأحمر");
 
     const excludedCategories = Array.from(document.querySelectorAll('.category-exclude-checkbox:checked')).map(cb => cb.value);
-    setBusy(btn, true, "جاري الحفظ والتقسيم...");
+    setBusy(btn, true, "جاري المعالجة...");
 
     try {
+        // حفظ التعيينات الجديدة
         for (const mapping of newMappingsToSave) {
             await setDoc(doc(db, "branchMappings", mapping.id), mapping.data);
             branchMappingsMap.set(mapping.id, mapping.data);
         }
 
-        const ordersToUpload = [];
+        processedOrdersToUpload = [];
+        let groupedData = {}; // الهيكل: { branchName: { car: "...", categories: { catName: [ products ] } } }
+
         currentSheetData.forEach(row => {
             const branchRaw = row['Stock Moves/Destination Location'];
             const categoryRaw = row['Stock Moves/Internal Type'];
@@ -419,28 +438,125 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
             const mapping = branchMappingsMap.get(branchId);
             if (!mapping || mapping.ignored) return;
 
-            ordersToUpload.push({
+            const productObj = {
                 productName: row['Stock Moves/Product/Name'] || "بدون اسم",
                 productId: row['Stock Moves/Product/Internal Reference'] || "",
                 barcode: row['Stock Moves/Product/Breadfast Barcode'] || "",
                 quantity: row['Stock Moves/Quantity'] || 1,
-                category: category || "",
+                category: category || "غير مصنف",
                 orderRef: row['Stock Moves/Reference'] || "",
                 branch: branch,
-                car: mapping.car, 
-                status: "Draft",
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
+                car: mapping.car
+            };
+
+            // تجميع الداتا للعرض
+            if (!groupedData[branch]) {
+                groupedData[branch] = { car: mapping.car, categories: {} };
+            }
+            if (!groupedData[branch].categories[productObj.category]) {
+                groupedData[branch].categories[productObj.category] = [];
+            }
+            groupedData[branch].categories[productObj.category].push(productObj);
+
+            // حفظ الداتا للرفع النهائي
+            processedOrdersToUpload.push(productObj);
         });
 
+        renderGroupedOrders(groupedData);
+
+        getElement("sheetMappingWizard").classList.add("hidden");
+        getElement("groupedOrdersContainer").classList.remove("hidden");
+        getElement("confirmAndUploadOrdersBtn").classList.remove("hidden");
+
+    } catch (error) { showToast("حدث خطأ أثناء معالجة الشيت"); console.error(error); } 
+    finally { setBusy(btn, false); }
+});
+
+// دالة عرض الداتا بشكل Accordion
+function renderGroupedOrders(groupedData) {
+    const container = getElement("branchesAccordionContainer");
+    container.innerHTML = "";
+
+    for (const [branch, branchData] of Object.entries(groupedData)) {
+        let categoriesHtml = "";
+
+        for (const [category, products] of Object.entries(branchData.categories)) {
+            let productsRows = products.map(p => `
+                <tr class="hover:bg-gray-700/50">
+                    <td class="p-2">${escapeHtml(p.productName)}</td>
+                    <td class="p-2" dir="ltr">${escapeHtml(p.barcode)}</td>
+                    <td class="p-2 text-center text-blue-300 font-bold">${escapeHtml(p.quantity)}</td>
+                    <td class="p-2 text-gray-400 text-xs">${escapeHtml(p.productId)}</td>
+                </tr>
+            `).join("");
+
+            categoriesHtml += `
+                <div class="mt-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800">
+                    <div class="bg-gray-700 p-3 flex justify-between items-center cursor-pointer hover:bg-gray-600 transition" onclick="toggleAccordion(this)">
+                        <span class="font-bold text-yellow-400"><i class="fas fa-tag mr-2"></i> ${escapeHtml(category)} <span class="text-xs bg-yellow-900 text-yellow-200 px-2 rounded ml-2">${products.length} منتج</span></span>
+                        <i class="fas fa-chevron-down chevron transition-transform text-gray-400"></i>
+                    </div>
+                    <div class="accordion-content p-0 border-0">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-right">
+                                <thead class="bg-gray-900 text-gray-400">
+                                    <tr>
+                                        <th class="p-2">المنتج</th>
+                                        <th class="p-2">الباركود</th>
+                                        <th class="p-2 text-center">الكمية</th>
+                                        <th class="p-2">ID المنتج</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-700">
+                                    ${productsRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML += `
+            <div class="bg-gray-800 border border-gray-600 rounded-xl mb-4 shadow-lg overflow-hidden">
+                <div class="bg-gray-700 p-4 flex justify-between items-center cursor-pointer hover:bg-gray-600 transition" onclick="toggleAccordion(this)">
+                    <div>
+                        <h4 class="text-xl font-bold text-white"><i class="fas fa-map-marker-alt text-green-400 ml-2"></i>${escapeHtml(branch)}</h4>
+                        <span class="text-sm text-blue-300 bg-blue-900/30 px-2 py-1 rounded inline-block mt-1"><i class="fas fa-truck text-xs"></i> سيارة: ${escapeHtml(branchData.car)}</span>
+                    </div>
+                    <i class="fas fa-chevron-down chevron transition-transform text-2xl text-gray-400"></i>
+                </div>
+                <div class="accordion-content p-0 border-0">
+                    <div class="p-4">
+                        ${categoriesHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// زر الاعتماد النهائي والرفع للفايربيس
+getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => {
+    if (processedOrdersToUpload.length === 0) return showToast("لا توجد أوردرات للرفع");
+    
+    const btn = e.target;
+    setBusy(btn, true, "جاري رفع الأوردرات...");
+
+    try {
         let batch = writeBatch(db);
         let count = 0, totalUploaded = 0;
 
-        for (const order of ordersToUpload) {
+        for (const order of processedOrdersToUpload) {
             if(!order.barcode) continue; 
+            
+            order.status = "Draft";
+            order.createdAt = serverTimestamp();
+            order.updatedAt = serverTimestamp();
+
             batch.set(doc(ordersRef), order);
             count++; totalUploaded++;
+            
             if (count === 400) {
                 await batch.commit();
                 batch = writeBatch(db);
@@ -449,17 +565,24 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
         }
         if (count > 0) await batch.commit();
 
-        showToast(`تم توزيع ورفع ${totalUploaded} منتج بنجاح!`, "success");
-        getElement("sheetMappingWizard").classList.add("hidden");
+        showToast(`تم رفع واعتماد ${totalUploaded} منتج بنجاح!`, "success");
+        
+        // إعادة تهيئة الواجهة
+        getElement("groupedOrdersContainer").classList.add("hidden");
         getElement("uploadPromptContainer").classList.remove("hidden");
+        processedOrdersToUpload = [];
         currentSheetData = [];
 
-    } catch (error) { showToast("حدث خطأ أثناء الرفع والتوزيع"); } 
-    finally { setBusy(btn, false); }
+    } catch (error) { 
+        showToast("حدث خطأ أثناء الرفع"); console.error(error); 
+    } finally { 
+        setBusy(btn, false); 
+    }
 });
 
+
 // --------------------------------------------------
-// 4. إنشاء الأوردرات اليدوية (مسودة) والبحث الذكي بالباركود
+// 4. إدارة الأوردرات المعلقة (البحث والمتابعة اليدوية)
 // --------------------------------------------------
 const barcodeInput = getElement("newOrderBarcode");
 const productInput = getElement("newOrderProduct");
@@ -483,12 +606,10 @@ async function saveDraftOrder(barcode, productName, hrid, notes) {
     try {
         let car = "";
         const userDoc = await getDoc(doc(db, "users", hrid));
-        if (userDoc.exists()) {
-            car = userDoc.data().car || "";
-        }
+        if (userDoc.exists()) { car = userDoc.data().car || ""; }
 
         await addDoc(ordersRef, { 
-            productName, barcode, hrid, car, // ربط الأوردر بسيارة المندوب
+            productName, barcode, hrid, car, 
             notes: notes || "", status: "Draft", 
             createdAt: serverTimestamp(), updatedAt: serverTimestamp() 
         });
@@ -510,23 +631,14 @@ getElement("orderForm")?.addEventListener("submit", (e) => {
     if (!product && barcodeToProductMap.has(barcode)) product = barcodeToProductMap.get(barcode);
     
     if (!product) {
-        const html = `
-            <p class="mb-3 text-sm text-gray-300">هذا الباركود غير مسجل مسبقاً، برجاء كتابة اسم المنتج ليتم حفظه:</p>
-            <input type="text" id="modalProductName" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500" placeholder="اسم المنتج هنا...">
-        `;
-        window.UI.openModal("منتج جديد", html, "حفظ الأوردر", "bg-green-600 hover:bg-green-700", async () => {
+        window.UI.openModal("منتج جديد", `<p class="mb-3 text-sm text-gray-300">الباركود غير مسجل، برجاء كتابة اسم المنتج:</p><input type="text" id="modalProductName" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">`, "حفظ", "bg-green-600", async () => {
             const modalProd = getElement("modalProductName").value.trim();
             if(!modalProd) return showToast("يجب إدخال اسم المنتج");
             await saveDraftOrder(barcode, modalProd, hrid, notes);
         });
-    } else {
-        saveDraftOrder(barcode, product, hrid, notes);
-    }
+    } else { saveDraftOrder(barcode, product, hrid, notes); }
 });
 
-// --------------------------------------------------
-// 5. متابعة الأوردرات المعلقة
-// --------------------------------------------------
 onSnapshot(ordersRef, (snapshot) => {
     allOrders = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -610,7 +722,7 @@ async function updateOrderStatus(orderId, newStatus) {
 }
 
 // --------------------------------------------------
-// 6. الإشعارات والتحكم بالنظام
+// 5. الإشعارات والتحكم بالنظام
 // --------------------------------------------------
 window.sendNotification = async () => {
     const type = getElement("notificationTargetType").value;
