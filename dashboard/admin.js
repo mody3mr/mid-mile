@@ -25,10 +25,11 @@ const trucksRef = collection(db, "trucks");
 const branchMappingsRef = collection(db, "branchMappings");
 const systemRef = doc(db, "system", "controls");
 const notificationsRef = collection(db, "notifications");
+const shiftManagersRef = collection(db, "shiftManagers");
+const branchesDirRef = collection(db, "branchesDirectory");
 
-// متغيرات عامة
+// متغيرات عامة لتخزين البيانات
 let allOrders = [];
-let barcodeToProductMap = new Map(); 
 let trucksList = [];
 let branchMappingsMap = new Map(); 
 let currentSheetData = []; 
@@ -37,6 +38,7 @@ let processedOrdersToUpload = [];
 let allUsers = []; 
 let carAssignments = {}; 
 let assignedReps = {}; 
+let allDirectoryBranches = [];
 
 // --------------------------------------------------
 // دوال مساعدة وتنظيف
@@ -57,7 +59,6 @@ function showToast(message, type = "error") {
     const toast = getElement("toastNotification");
     const icon = getElement("toastIcon");
     const text = getElement("toastMessage");
-    
     if (!toast || !icon || !text) return;
 
     text.textContent = message;
@@ -110,10 +111,8 @@ getElement("teamForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = getElement("newTeamName").value.trim();
     if (!name) return;
-    
     const btn = e.target.querySelector('button'); 
     setBusy(btn, true, "إضافة...");
-    
     try { 
         await addDoc(teamsRef, { name, createdAt: serverTimestamp() }); 
         getElement("newTeamName").value = ""; 
@@ -128,18 +127,16 @@ getElement("teamForm")?.addEventListener("submit", async (e) => {
 onSnapshot(teamsRef, (snapshot) => {
     const tbody = getElement("teamsTableBody");
     const selects = [getElement("newEmpTeam"), getElement("targetTeamValue")];
-    
     if (tbody) tbody.innerHTML = "";
     let optionsHtml = '<option value="">اختر التيم...</option>';
 
-    if (snapshot.empty && tbody) {
-        tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center">لا توجد فرق</td></tr>';
+    if(snapshot.empty && tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center">لا توجد فرق مسجلة</td></tr>';
     }
     
     snapshot.forEach(docSnap => {
         const teamName = escapeHtml(docSnap.data().name);
         optionsHtml += `<option value="${teamName}">${teamName}</option>`;
-        
         if (tbody) {
             tbody.innerHTML += `
                 <tr class="hover:bg-gray-700/50">
@@ -152,7 +149,6 @@ onSnapshot(teamsRef, (snapshot) => {
             `;
         }
     });
-    
     selects.forEach(sel => { if(sel) sel.innerHTML = optionsHtml; });
 });
 
@@ -167,10 +163,8 @@ getElement("truckForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = getElement("newTruckName").value.trim();
     if (!name) return;
-    
     const btn = e.target.querySelector('button'); 
     setBusy(btn, true, "إضافة...");
-    
     try { 
         await addDoc(trucksRef, { name, createdAt: serverTimestamp() }); 
         getElement("newTruckName").value = ""; 
@@ -186,7 +180,6 @@ onSnapshot(trucksRef, (snapshot) => {
     const tbody = getElement("trucksTableBody");
     const selects = [getElement("targetCarValue")];
     trucksList = [];
-    
     if (tbody) tbody.innerHTML = "";
     let optionsHtml = '<option value="">اختر العربية...</option>';
 
@@ -198,7 +191,6 @@ onSnapshot(trucksRef, (snapshot) => {
         const carName = escapeHtml(docSnap.data().name);
         trucksList.push(carName);
         optionsHtml += `<option value="${carName}">${carName}</option>`;
-        
         if (tbody) {
             tbody.innerHTML += `
                 <tr class="hover:bg-gray-700/50">
@@ -211,7 +203,6 @@ onSnapshot(trucksRef, (snapshot) => {
             `;
         }
     });
-    
     selects.forEach(sel => { if(sel) sel.innerHTML = optionsHtml; });
 });
 
@@ -255,6 +246,7 @@ onSnapshot(usersRef, (snapshot) => {
                 <td class="p-4 text-blue-400 font-bold">${escapeHtml(hrid)}</td>
                 <td class="p-4" dir="ltr">${escapeHtml(user.mobile)}</td>
                 <td class="p-4">${escapeHtml(user.team)}</td>
+                <td class="p-4 text-yellow-400 font-bold">${escapeHtml(user.car || 'غير محدد')}</td>
                 <td class="p-4 text-center tracking-widest">${user.pinCode || '-'}</td>
                 <td class="p-4 text-center">
                     <button onclick="resetPin('${hrid}')" class="text-xs bg-red-900/50 text-red-400 px-2 py-1 rounded mb-1"><i class="fas fa-key"></i></button>
@@ -309,8 +301,9 @@ getElement("employeeForm")?.addEventListener("submit", async (e) => {
 
 window.openEditEmployeeModal = (hrid, name, mobile, team) => {
     const html = `
-        <input type="text" id="editModalName" value="${name}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2">
-        <input type="text" id="editModalMobile" value="${mobile}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2">
+        <input type="text" id="editModalName" value="${name}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2" placeholder="الاسم">
+        <input type="text" id="editModalMobile" value="${mobile}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2" placeholder="الموبايل">
+        <p class="text-xs text-gray-400 mb-1">تعديل التيم (الحالي: ${team})</p>
         <select id="editModalTeam" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2">
             ${getElement("newEmpTeam").innerHTML}
         </select>
@@ -340,7 +333,83 @@ window.resetPin = (hrid) => {
 };
 
 // --------------------------------------------------
-// 3. إدارة الأوردرات (رفع وتوزيع من الإكسيل)
+// 3. دليل الفروع (التاب الجديد)
+// --------------------------------------------------
+getElement("branchForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = {
+        name: getElement("brName").value.trim(),
+        hours: getElement("brHours").value.trim(),
+        location: getElement("brLocation").value.trim(),
+        manager: getElement("brManager").value.trim(),
+        staff: getElement("brStaff").value.trim(),
+        permit: getElement("brPermit").value.trim(),
+        createdAt: serverTimestamp()
+    };
+    
+    const btn = e.target.querySelector("button");
+    setBusy(btn, true, "حفظ...");
+    
+    try {
+        await addDoc(branchesDirRef, data);
+        e.target.reset();
+        getElement("branchFormPanel").classList.add("hidden");
+        showToast("تم إضافة بيانات الفرع للدليل", "success");
+    } catch(e) {
+        showToast("تعذر الإضافة");
+    } finally {
+        setBusy(btn, false);
+    }
+});
+
+onSnapshot(branchesDirRef, (snapshot) => {
+    allDirectoryBranches = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+    renderDirectoryBranches();
+});
+
+function renderDirectoryBranches() {
+    const tbody = getElement("branchesTableBody");
+    if (!tbody) return;
+    
+    const search = getElement("searchBranchInput")?.value.toLowerCase() || "";
+    tbody.innerHTML = "";
+    
+    const filtered = allDirectoryBranches.filter(b => b.name.toLowerCase().includes(search));
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">لا توجد فروع مسجلة بالدليل</td></tr>';
+        return;
+    }
+
+    filtered.forEach(b => {
+        tbody.innerHTML += `
+            <tr class="hover:bg-gray-700/50">
+                <td class="p-3 font-bold text-blue-400">${escapeHtml(b.name)}</td>
+                <td class="p-3 text-gray-300 text-sm">${escapeHtml(b.hours)}</td>
+                <td class="p-3 text-gray-300 text-sm">${escapeHtml(b.manager)}</td>
+                <td class="p-3 text-center">
+                    <button onclick="deleteDirBranch('${b.id}')" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-2 py-1 rounded transition">حذف</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+getElement("searchBranchInput")?.addEventListener("input", renderDirectoryBranches);
+
+window.deleteDirBranch = (id) => {
+    window.UI.openModal("تأكيد الحذف", "<p class='text-red-400'>هل أنت متأكد من حذف الفرع من الدليل نهائياً؟</p>", "حذف", "bg-red-600", async () => {
+        try {
+            await deleteDoc(doc(db, "branchesDirectory", id));
+            showToast("تم الحذف بنجاح", "success");
+        } catch(e) {
+            showToast("تعذر الحذف");
+        }
+    });
+};
+
+// --------------------------------------------------
+// 4. إدارة الأوردرات (رفع الإكسيل وتوزيع العربيات)
 // --------------------------------------------------
 onSnapshot(branchMappingsRef, (snapshot) => {
     branchMappingsMap.clear();
@@ -365,7 +434,7 @@ getElement("excelFileInput")?.addEventListener("change", (e) => {
                 showToast("الشيت فارغ أو غير صالح");
             }
         } catch(error) { 
-            showToast("خطأ في القراءة"); 
+            showToast("خطأ في قراءة ملف الإكسيل"); 
         }
         e.target.value = ""; 
     };
@@ -384,7 +453,6 @@ function setupMappingWizard(data) {
         const productNameRaw = row['Stock Moves/Product/Name'];
         const barcodeRaw = row['Stock Moves/Product/Breadfast Barcode'];
         
-        // تجاهل الصفوف الفارغة من المنتجات
         if (!productNameRaw || !barcodeRaw) return; 
 
         const branchRaw = row['Stock Moves/Destination Location'];
@@ -426,15 +494,15 @@ function setupMappingWizard(data) {
             newBranchesBody.innerHTML += `
                 <tr class="hover:bg-gray-700/50 new-branch-row" data-branch="${escapeHtml(branch)}" data-branch-id="${escapeHtml(branchId)}">
                     <td class="p-3 font-bold text-yellow-400">${escapeHtml(branch)}</td>
-                    <td class="p-3"><select class="branch-car-select w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white">${carOptions}</select></td>
-                    <td class="p-3"><input type="text" class="branch-ignore-input w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white" placeholder="سبب التجاهل..."></td>
+                    <td class="p-3"><select class="branch-car-select w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white outline-none focus:border-blue-500">${carOptions}</select></td>
+                    <td class="p-3"><input type="text" class="branch-ignore-input w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white outline-none focus:border-red-500" placeholder="سبب التجاهل..."></td>
                 </tr>
             `;
         }
     });
 
     if (newCount === 0) {
-        newBranchesBody.innerHTML = '<tr><td colspan="3" class="text-center text-green-400">الفروع معرفة مسبقاً</td></tr>';
+        newBranchesBody.innerHTML = '<tr><td colspan="3" class="text-center text-green-400 font-bold"><i class="fas fa-check-circle"></i> الفروع معرفة مسبقاً</td></tr>';
     }
     
     getElement("newBranchesCount").textContent = newCount; 
@@ -442,8 +510,8 @@ function setupMappingWizard(data) {
 
     uniqueCategories.forEach(cat => {
         categoriesContainer.innerHTML += `
-            <label class="flex items-center gap-2 bg-gray-900 px-3 py-2 rounded border border-gray-600">
-                <input type="checkbox" value="${escapeHtml(cat)}" class="category-exclude-checkbox w-4 h-4 text-yellow-500 bg-gray-800 border-gray-600 rounded">
+            <label class="flex items-center gap-2 bg-gray-900 px-3 py-2 rounded border border-gray-600 cursor-pointer hover:border-yellow-500 transition">
+                <input type="checkbox" value="${escapeHtml(cat)}" class="category-exclude-checkbox w-4 h-4 text-yellow-500 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500">
                 <span class="text-sm text-gray-300">${escapeHtml(cat)}</span>
             </label>
         `;
@@ -522,7 +590,7 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
         carAssignments = {}; 
         assignedReps = {};
         
-        renderCarsAccordion(groupedDataByCar, "carsAccordionContainer", true); // عرض للمعاينة والإسناد
+        renderCarsAccordion(groupedDataByCar, "carsAccordionContainer", true);
 
         getElement("sheetMappingWizard").classList.add("hidden");
         getElement("groupedOrdersContainer").classList.remove("hidden");
@@ -682,7 +750,6 @@ getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => 
             }
             if (count > 0) await batch.commit();
 
-            // تحديث المناديب بعربياتهم الجديدة
             let userBatch = writeBatch(db);
             let uc = 0;
             for (const [carName, hrid] of Object.entries(carAssignments)) {
@@ -709,9 +776,7 @@ getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => 
     });
 });
 
-// --------------------------------------------------
-// فلترة وعرض الأوردرات الموزعة من الداتا بيز حسب التاريخ
-// --------------------------------------------------
+// سجل الداتا بيز مفلتر بالتاريخ
 const dateFilterInput = getElement("dbOrdersDateFilter");
 if(dateFilterInput) {
     dateFilterInput.valueAsDate = new Date();
@@ -729,9 +794,7 @@ function renderDbOrdersByDate() {
     getElement("displayFilteredDate").innerText = `(تاريخ: ${new Date(targetDate).toLocaleDateString('ar-EG')})`;
 
     const filteredOrders = allOrders.filter(o => {
-        // نستبعد الأوردرات المعلقة لأنها في تاب تاني
         if (o.status === "Pending" || o.status === "Resolved") return false;
-        
         const oDate = o.createdAt?.toDate ? o.createdAt.toDate().toDateString() : null;
         return oDate === targetDate;
     });
@@ -754,19 +817,18 @@ function renderDbOrdersByDate() {
         groupedDataByCar[carName].branches[branch].categories[category].push(o);
     });
 
-    renderCarsAccordion(groupedDataByCar, "dbCarsAccordionContainer", false); // وضع العرض فقط
+    renderCarsAccordion(groupedDataByCar, "dbCarsAccordionContainer", false);
 }
 
 
 // --------------------------------------------------
-// 4. إدارة المعلقات (Pending Orders) المتسلسلة
+// 5. الأوردرات المعلقة (Pending Orders) - النظام التسلسلي
 // --------------------------------------------------
 const pendingHridInput = getElement("newOrderHrid");
 const pendingBranchSelect = getElement("newOrderBranch");
 const pendingProductSelect = getElement("newOrderProduct");
 const pendingBarcodeInp = getElement("newOrderBarcode");
 
-// 1. عند اختيار المندوب -> جلب الفروع الخاصة به
 pendingHridInput?.addEventListener("input", (e) => {
     const hrid = e.target.value.trim();
     
@@ -792,7 +854,6 @@ pendingHridInput?.addEventListener("input", (e) => {
     }
 });
 
-// 2. عند اختيار الفرع -> جلب المنتجات الموجودة في الفرع
 pendingBranchSelect?.addEventListener("change", (e) => {
     const branch = e.target.value;
     const hrid = pendingHridInput.value.trim();
@@ -802,31 +863,26 @@ pendingBranchSelect?.addEventListener("change", (e) => {
     
     if(!branch || !hrid) return;
 
-    const products = [];
+    const productsMap = new Map();
     allOrders.forEach(o => {
-        if (o.hrid === hrid && o.branch === branch && o.status !== 'Pending' && o.status !== 'Resolved') {
-            // إضافة المنتج لو مش موجود في القائمة (لتجنب التكرار)
-            if(!products.find(p => p.barcode === o.barcode)) {
-                products.push({ name: o.productName, barcode: o.barcode });
-            }
+        if (o.hrid === hrid && o.branch === branch && o.productName && o.status !== 'Pending' && o.status !== 'Resolved') {
+            productsMap.set(o.barcode, o.productName);
         }
     });
 
-    if (products.length === 0) {
-        pendingProductSelect.innerHTML = '<option value="">لا توجد منتجات</option>';
+    if (productsMap.size === 0) {
+        pendingProductSelect.innerHTML = '<option value="">لا توجد منتجات مسجلة في هذا الفرع</option>';
     } else {
-        products.forEach(p => {
-            pendingProductSelect.innerHTML += `<option value="${escapeHtml(p.barcode)}">${escapeHtml(p.name)}</option>`;
+        productsMap.forEach((name, barcode) => {
+            pendingProductSelect.innerHTML += `<option value="${escapeHtml(barcode)}">${escapeHtml(name)}</option>`;
         });
     }
 });
 
-// 3. عند اختيار المنتج -> كتابة الباركود تلقائياً
 pendingProductSelect?.addEventListener("change", (e) => {
-    pendingBarcodeInp.value = e.target.value; // قيمة الـ select هي الباركود
+    pendingBarcodeInp.value = e.target.value;
 });
 
-// 4. حفظ الأوردر المعلق
 getElement("orderForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     
@@ -835,7 +891,6 @@ getElement("orderForm")?.addEventListener("submit", (e) => {
     const barcode = pendingBarcodeInp.value.trim();
     const notes = getElement("newOrderNotes").value.trim();
     
-    // الحصول على اسم المنتج من القائمة المنسدلة
     const productName = pendingProductSelect.options[pendingProductSelect.selectedIndex]?.text;
 
     if (!barcode || !hrid || !branch || !productName) return showToast("برجاء إكمال جميع الخطوات");
@@ -855,7 +910,6 @@ async function savePendingOrder(barcode, productName, hrid, branch, notes) {
             createdAt: serverTimestamp(), updatedAt: serverTimestamp() 
         });
         
-        // تفريغ الحقول بعد الحفظ
         pendingHridInput.value = ""; 
         pendingBranchSelect.innerHTML = '<option value="">أدخل المندوب أولاً...</option>';
         pendingProductSelect.innerHTML = '<option value="">أدخل الفرع أولاً...</option>';
@@ -868,9 +922,6 @@ async function savePendingOrder(barcode, productName, hrid, branch, notes) {
     }
 }
 
-// --------------------------------------------------
-// جلب وعرض الأوردرات
-// --------------------------------------------------
 onSnapshot(ordersRef, (snapshot) => {
     allOrders = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -914,7 +965,6 @@ function renderPendingOrders() {
         const repName = allUsers.find(u => u.id === order.hrid)?.name || order.hrid;
         const orderDate = formatDate(order.createdAt);
         
-        // الألوان والنصوص بناءً على الحالة
         const isResolved = status === 'Resolved';
         const cardBorder = isResolved ? 'border-green-700' : 'border-orange-700';
         const statusBg = isResolved ? 'bg-green-900/50 text-green-400' : 'bg-orange-900/50 text-orange-400';
@@ -925,9 +975,9 @@ function renderPendingOrders() {
         div.innerHTML = `
             <div class="min-w-0 flex-1 w-full">
                 <!-- العنوان الرئيسي: اسم الفرع -->
-                <div class="font-bold text-xl text-green-400 mb-2 border-b border-gray-700 pb-2">
-                    <i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.branch || 'فرع غير محدد')}
-                    <span class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded inline-block mx-2"><i class="fas fa-user"></i> المندوب: ${escapeHtml(repName)}</span>
+                <div class="font-bold text-xl text-green-400 mb-2 border-b border-gray-700 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                    <div><i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.branch || 'فرع غير محدد')}</div>
+                    <span class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded w-max"><i class="fas fa-user"></i> المندوب: ${escapeHtml(repName)}</span>
                 </div>
                 
                 <!-- التفاصيل (المنتج والباركود والتاريخ) -->
@@ -966,7 +1016,6 @@ function renderPendingOrders() {
     });
 }
 
-// دالة حذف الأوردر المعلق
 window.deletePendingOrder = (orderId) => {
     window.UI.openModal("تأكيد الحذف", "<p class='text-red-400'>هل أنت متأكد من حذف هذا الأوردر المعلق نهائياً؟</p>", "حذف نهائي", "bg-red-600", async () => {
         try {
@@ -978,7 +1027,6 @@ window.deletePendingOrder = (orderId) => {
     });
 };
 
-// دالة تعديل الأوردر المعلق
 window.editPendingOrder = (orderId, currentNotes) => {
     const html = `
         <label class="block text-sm text-gray-400 mb-1">سبب التعليق الجديد:</label>
@@ -997,8 +1045,75 @@ window.editPendingOrder = (orderId, currentNotes) => {
 
 
 // --------------------------------------------------
-// 5. الإشعارات والتحكم بالنظام
+// 6. الإعدادات والإشعارات
 // --------------------------------------------------
+getElement("odooSettingsForm")?.addEventListener("submit", async(e)=>{
+    e.preventDefault();
+    const username = getElement("odooEmail")?.value.trim(); 
+    const password = getElement("odooPassword").value;
+    const btn = e.target.querySelector("button");
+    setBusy(btn, true, "حفظ...");
+    try {
+        await setDoc(doc(db, "system", "odoo_credentials"), { username, password, updatedAt: serverTimestamp() });
+        showToast("تم حفظ البيانات", "success");
+    } catch(err) {
+        showToast("تعذر الحفظ");
+    } finally { setBusy(btn, false); }
+});
+
+const shiftManagersRef = collection(db, "shiftManagers");
+
+getElement("shiftManagerForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = {
+        name: getElement("smName").value.trim(),
+        phone: getElement("smPhone").value.trim(),
+        whatsapp: getElement("smWhatsapp").value.trim(),
+        createdAt: serverTimestamp()
+    };
+    const btn = e.target.querySelector("button");
+    setBusy(btn, true, "إضافة...");
+    try {
+        await addDoc(shiftManagersRef, data);
+        e.target.reset();
+        showToast("تم إضافة المدير", "success");
+    } catch(e) {
+        showToast("خطأ");
+    } finally {
+        setBusy(btn, false);
+    }
+});
+
+onSnapshot(shiftManagersRef, (snapshot) => {
+    const tbody = getElement("shiftManagersTableBody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (snapshot.empty) {
+        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">لا يوجد مديرين مسجلين</td></tr>';
+        return;
+    }
+    snapshot.forEach(docSnap => {
+        const sm = docSnap.data();
+        tbody.innerHTML += `
+            <tr class="hover:bg-gray-700/50">
+                <td class="p-3">${escapeHtml(sm.name)}</td>
+                <td class="p-3" dir="ltr">${escapeHtml(sm.phone)}</td>
+                <td class="p-3" dir="ltr">${escapeHtml(sm.whatsapp)}</td>
+                <td class="p-3 text-center">
+                    <button onclick="deleteShiftManager('${docSnap.id}')" class="text-xs bg-red-900/50 text-red-400 px-2 py-1 rounded">حذف</button>
+                </td>
+            </tr>
+        `;
+    });
+});
+
+window.deleteShiftManager = (id) => {
+    window.UI.openModal("تأكيد", "حذف المدير؟", "حذف", "bg-red-600", async () => {
+        await deleteDoc(doc(db, "shiftManagers", id));
+        showToast("تم الحذف", "success");
+    });
+};
+
 window.sendNotification = async () => {
     const type = getElement("notificationTargetType").value;
     let target = type === 'rep' ? getElement("targetRepValue").value : 
@@ -1033,6 +1148,5 @@ window.forceLogoutAll = async () => {
     } 
 };
 
-// فلاتر وربط الأحداث
 getElement("adminOrderSearch")?.addEventListener("input", renderPendingOrders);
 getElement("adminOrderFilter")?.addEventListener("change", renderPendingOrders);
