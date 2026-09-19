@@ -7,6 +7,8 @@
     <link rel="manifest" href="../manifest.json">
     <meta name="theme-color" content="#111827">
     <link rel="icon" href="../breadfast-logo (1).png">
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -16,9 +18,14 @@
             }
         }
     </script>
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- مكتبة قراءة ملفات الإكسيل -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <style>
-        /* تنسيق إضافي للقوائم المنسدلة والبحث */
+        /* إخفاء سهم القائمة المنسدلة الافتراضي في حقول البحث Datalist */
         input[list]::-webkit-calendar-picker-indicator { display: none !important; }
     </style>
 </head>
@@ -128,7 +135,7 @@
                 <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
                     <form id="teamForm" class="flex flex-col md:flex-row gap-4">
                         <input type="text" id="newTeamName" placeholder="اسم التيم (مثال: تيم أكتوبر)" required class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap"><i class="fas fa-plus ml-2"></i>إضافة تيم</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap"><i class="fas fa-plus ml-2"></i> إضافة تيم</button>
                     </form>
                 </div>
                 <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
@@ -155,7 +162,7 @@
                 <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6">
                     <form id="truckForm" class="flex flex-col md:flex-row gap-4">
                         <input type="text" id="newTruckName" placeholder="رقم أو اسم العربية (مثال: سيارة أ ب ج - 123)" required class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 outline-none">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap"><i class="fas fa-plus ml-2"></i>إضافة عربية</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold whitespace-nowrap"><i class="fas fa-plus ml-2"></i> إضافة عربية</button>
                     </form>
                 </div>
                 <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
@@ -189,13 +196,15 @@
                         <input type="text" id="newEmpHrid" placeholder="HRID" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         <input type="text" id="newEmpMobile" placeholder="رقم الموبايل" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                         
-                        <!-- قائمة التيمات هتظهر هنا كدروب داون -->
+                        <!-- قوائم التيم والعربية المنسدلة -->
                         <select id="newEmpTeam" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                             <option value="">اختر التيم...</option>
-                            <!-- يتم التعبئة من JS -->
+                        </select>
+                        <select id="newEmpCar" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500 md:col-span-4">
+                            <option value="">اختر العربية المخصصة لهذا المندوب...</option>
                         </select>
 
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold md:col-span-4">حفظ المندوب</button>
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold md:col-span-4 mt-2">حفظ المندوب</button>
                     </form>
                 </div>
                 <div class="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
@@ -206,8 +215,8 @@
                                 <th class="p-4">HRID</th>
                                 <th class="p-4">رقم الموبايل</th>
                                 <th class="p-4">التيم</th>
-                                <th class="p-4">تاريخ الإنشاء</th>
-                                <th class="p-4 text-center">رقم الـ PIN</th>
+                                <th class="p-4">العربية</th>
+                                <th class="p-4 text-center">الـ PIN</th>
                                 <th class="p-4 text-center">الإجراءات</th>
                             </tr>
                         </thead>
@@ -218,19 +227,85 @@
                 </div>
             </section>
 
-            <!-- 5. تاب إدارة الأوردرات (الرئيسية للرفع) -->
+            <!-- 5. تاب إدارة الأوردرات (رفع شيت الإكسيل وتقسيم العربيات) -->
             <section id="orderManageTab" class="tab-content hidden">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">إدارة الأوردرات والتوزيع</h2>
-                    <button id="manualUploadBtn" type="button" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg">
-                        <i class="fas fa-upload"></i> رفع الأوردرات يدوياً
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
+                    <button id="manualUploadBtn" onclick="document.getElementById('excelFileInput').click()" type="button" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg">
+                        <i class="fas fa-upload"></i> رفع شيت الأوردرات
                     </button>
                 </div>
-                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center">
+                
+                <!-- رسالة التوجيه المبدئية -->
+                <div id="uploadPromptContainer" class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
                     <div class="text-gray-500 py-10">
-                        <i class="fas fa-file-excel text-4xl mb-4 opacity-50"></i>
-                        <p>سيتم تصميم واجهة إدارة وتقسيم شيت الأوردرات هنا قريباً...</p>
+                        <i class="fas fa-file-excel text-5xl mb-4 opacity-50"></i>
+                        <p class="text-lg">قم برفع شيت الإكسيل (Transfer stock.picking) لبدء التقسيم والتوزيع.</p>
                     </div>
+                </div>
+
+                <!-- لوحة التقسيم (تظهر بعد رفع الشيت) -->
+                <div id="sheetMappingWizard" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400 border-b border-gray-700 pb-3"><i class="fas fa-cogs ml-2"></i> إعداد وتقسيم فروع الشيت</h3>
+                    
+                    <!-- 1. الفروع الجديدة (يجب تعيينها أو تجاهلها) -->
+                    <div class="mb-6">
+                        <h4 class="font-bold mb-3 text-red-400 flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle"></i> فروع جديدة (تحتاج لتعيين)
+                            <span id="newBranchesCount" class="bg-red-900/50 text-red-300 px-2 py-0.5 rounded text-sm">0</span>
+                        </h4>
+                        <div class="overflow-x-auto rounded-lg border border-gray-700">
+                            <table class="w-full text-right text-sm">
+                                <thead class="bg-gray-700">
+                                    <tr>
+                                        <th class="p-3">اسم الفرع في الشيت</th>
+                                        <th class="p-3">تعيين لعربية</th>
+                                        <th class="p-3 w-1/3">أو تجاهل الفرع (السبب)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="newBranchesTableBody" class="divide-y divide-gray-700">
+                                    <!-- يتم إضافتها بالـ JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 2. الفروع المحفوظة مسبقاً (للمراجعة) -->
+                    <div class="mb-6">
+                        <h4 class="font-bold mb-3 text-green-400 flex items-center gap-2 cursor-pointer" onclick="document.getElementById('savedBranchesContainer').classList.toggle('hidden')">
+                            <i class="fas fa-check-circle"></i> فروع مسجلة مسبقاً (اضغط للعرض/الإخفاء)
+                            <span id="savedBranchesCount" class="bg-green-900/50 text-green-300 px-2 py-0.5 rounded text-sm">0</span>
+                        </h4>
+                        <div id="savedBranchesContainer" class="hidden overflow-x-auto rounded-lg border border-gray-700">
+                            <table class="w-full text-right text-sm">
+                                <thead class="bg-gray-700">
+                                    <tr>
+                                        <th class="p-3">اسم الفرع</th>
+                                        <th class="p-3">العربية المعينة</th>
+                                        <th class="p-3">الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="savedBranchesTableBody" class="divide-y divide-gray-700">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 3. استبعاد الكاتيجوري -->
+                    <div class="mb-6 border-t border-gray-700 pt-4">
+                        <h4 class="font-bold mb-3 text-yellow-400 flex items-center gap-2">
+                            <i class="fas fa-filter"></i> استبعاد أقسام (Categories) من التحضير
+                        </h4>
+                        <p class="text-sm text-gray-400 mb-3">حدد الأقسام التي لا ترغب في إرسالها للمناديب اليوم:</p>
+                        <div id="categoriesContainer" class="flex flex-wrap gap-3">
+                            <!-- Checkboxes يتم إضافتها بالـ JS -->
+                        </div>
+                    </div>
+
+                    <button id="processSheetBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-lg text-lg mt-4 transition">
+                        حفظ الإعدادات وتوزيع المنتجات على المناديب
+                    </button>
                 </div>
             </section>
 
@@ -293,14 +368,12 @@
                         <div id="targetTeamContainer" class="hidden mb-3">
                             <select id="targetTeamValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                                 <option value="">اختر التيم...</option>
-                                <!-- يتم التعبئة من JS -->
                             </select>
                         </div>
 
                         <div id="targetCarContainer" class="hidden mb-3">
                             <select id="targetCarValue" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                                 <option value="">اختر العربية...</option>
-                                <!-- يتم التعبئة من JS -->
                             </select>
                         </div>
 
@@ -371,7 +444,6 @@
 
     <!-- سكربت التحكم في الواجهة (UI) -->
     <script>
-        // إعدادات القائمة الجانبية
         const adminSidebar = document.getElementById('adminSidebar');
         const sidebarBackdrop = document.getElementById('sidebarBackdrop');
         const menuToggle = document.getElementById('menuToggle');
@@ -384,7 +456,6 @@
         menuToggle?.addEventListener('click', () => setSidebarOpen(adminSidebar.classList.contains('translate-x-full')));
         sidebarBackdrop?.addEventListener('click', () => setSidebarOpen(false));
 
-        // تبديل التابات
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.add('hidden');
@@ -407,7 +478,6 @@
             setSidebarOpen(false);
         }
 
-        // إظهار/إخفاء حقول الإشعارات الذكية
         function toggleNotificationInput() {
             const type = document.getElementById('notificationTargetType').value;
             document.getElementById('targetRepContainer').classList.add('hidden');
@@ -419,7 +489,6 @@
             if(type === 'car') document.getElementById('targetCarContainer').classList.remove('hidden');
         }
 
-        // --- نظام الـ Modals الاحترافي ---
         const customModal = document.getElementById('customModal');
         const customModalContent = document.getElementById('customModalContent');
         const modalTitle = document.getElementById('modalTitle');
@@ -430,19 +499,15 @@
         function openModal(title, htmlContent, confirmText, confirmColorClass, actionCallback) {
             modalTitle.innerText = title;
             modalBody.innerHTML = htmlContent;
-            
-            // تظبيط زرار التأكيد
             modalConfirmBtn.innerText = confirmText;
             modalConfirmBtn.className = `px-4 py-2 text-white rounded-lg transition font-bold shadow-lg ${confirmColorClass}`;
             
-            // تفعيل الـ Callback
             currentModalAction = actionCallback;
             modalConfirmBtn.onclick = () => {
                 if(currentModalAction) currentModalAction();
                 closeModal();
             };
 
-            // إظهار المودال وأنيميشن
             customModal.classList.remove('hidden');
             setTimeout(() => {
                 customModal.classList.remove('opacity-0');
@@ -455,15 +520,11 @@
             customModal.classList.add('opacity-0');
             customModalContent.classList.remove('scale-100');
             customModalContent.classList.add('scale-95');
-            setTimeout(() => {
-                customModal.classList.add('hidden');
-            }, 300);
+            setTimeout(() => { customModal.classList.add('hidden'); }, 300);
         }
 
-        // تصدير دوال المودال عشان الـ JS يستخدمها بدل الـ prompt و alert
         window.UI = { openModal, closeModal };
         
-        // ربط الخروج الإجباري بالمودال الجديد
         function forceLogoutConfirm() {
             window.UI.openModal(
                 "تأكيد تسجيل الخروج الجماعي",
