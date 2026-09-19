@@ -40,7 +40,6 @@ let processedOrdersToUpload = [];
 function getElement(id) { return document.getElementById(id); }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 
-// دالة لتنظيف اسم الفرع من الأقواس والأرقام الزائدة مثل (1), (2)
 function cleanBranchName(name) {
     if (!name) return "";
     return String(name).replace(/\s*\(\d+\)\s*$/g, '').trim();
@@ -327,9 +326,15 @@ function setupMappingWizard(data) {
     let uniqueCategories = new Set();
 
     data.forEach(row => {
+        const productNameRaw = row['Stock Moves/Product/Name'];
+        const barcodeRaw = row['Stock Moves/Product/Breadfast Barcode'];
+        
+        // الشرط الأهم: تجاهل الصفوف الفارغة (العناوين والفواصل)
+        if (!productNameRaw || !barcodeRaw) return;
+
         const branchRaw = row['Stock Moves/Destination Location'];
         const categoryRaw = row['Stock Moves/Internal Type'];
-        // تنظيف اسم الفرع من البداية لتجنب التكرارات
+        
         if(branchRaw !== undefined) uniqueBranches.add(cleanBranchName(branchRaw));
         if(categoryRaw !== undefined) uniqueCategories.add(String(categoryRaw).trim());
     });
@@ -430,8 +435,15 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
         let groupedData = {}; 
 
         currentSheetData.forEach(row => {
+            const productNameRaw = row['Stock Moves/Product/Name'];
+            const barcodeRaw = row['Stock Moves/Product/Breadfast Barcode'];
+            
+            // فلترة الصفوف الفارغة هنا أيضاً
+            if (!productNameRaw || !barcodeRaw) return;
+
             const branchRaw = row['Stock Moves/Destination Location'];
             const categoryRaw = row['Stock Moves/Internal Type'];
+            
             const branch = branchRaw !== undefined ? cleanBranchName(branchRaw) : "";
             const category = categoryRaw !== undefined ? String(categoryRaw).trim() : "";
             const branchId = branch.replace(/[\/\.#$\[\]]/g, '_');
@@ -442,9 +454,9 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
             if (!mapping || mapping.ignored) return;
 
             const productObj = {
-                productName: row['Stock Moves/Product/Name'] || "بدون اسم",
+                productName: String(productNameRaw).trim(),
                 productId: row['Stock Moves/Product/Internal Reference'] || "",
-                barcode: row['Stock Moves/Product/Breadfast Barcode'] || "",
+                barcode: String(barcodeRaw).trim(),
                 quantity: row['Stock Moves/Quantity'] || 1,
                 category: category || "غير مصنف",
                 orderRef: row['Stock Moves/Reference'] || "",
