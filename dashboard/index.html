@@ -126,6 +126,11 @@
             <button onclick="switchTab('employeesTab')" id="btn-employeesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
                 <i class="fas fa-users w-5"></i> إدارة المناديب
             </button>
+
+            <!-- التاب الجديدة للفروع -->
+            <button onclick="switchTab('branchesTab')" id="btn-branchesTab" class="tab-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition">
+                <i class="fas fa-code-branch w-5"></i> دليل الفروع
+            </button>
             
             <button onclick="switchTab('orderManageTab')" id="btn-orderManageTab" class="tab-btn w-full flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg transition">
                 <i class="fas fa-tasks w-5"></i> إدارة الأوردرات
@@ -277,7 +282,76 @@
                 </div>
             </section>
 
-            <!-- 5. تاب إدارة الأوردرات (رفع وتوزيع وسجل الأيام) -->
+            <!-- تاب إدارة الفروع (الجديد) -->
+            <section id="branchesTab" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">دليل الفروع وتصاريح الدخول</h2>
+                    <button id="toggleBranchFormBtn" onclick="document.getElementById('branchFormPanel').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition shadow-lg">
+                        <i class="fas fa-plus"></i> إضافة فرع
+                    </button>
+                </div>
+                
+                <!-- فورم إضافة فرع جديد -->
+                <div id="branchFormPanel" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 mb-6 shadow-lg">
+                    <h3 class="text-lg font-bold mb-4 text-blue-400">إضافة بيانات فرع جديد</h3>
+                    <form id="branchForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">اسم الفرع (بالشيت)</label>
+                            <input type="text" id="brName" placeholder="مثال: BCAB/Breadfast Coffee..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">مواعيد العمل</label>
+                            <input type="text" id="brHours" placeholder="مثال: من 9 ص إلى 5 م" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">اللوكيشن (رابط أو وصف)</label>
+                            <input type="text" id="brLocation" placeholder="رابط خرائط جوجل أو وصف العنوان" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">مدير الفرع</label>
+                            <input type="text" id="brManager" placeholder="اسم مدير الفرع ورقم التواصل" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-400 mb-1">الموظفين المتواجدين بالفرع (اختياري)</label>
+                            <input type="text" id="brStaff" placeholder="أسماء الموظفين للرجوع إليهم" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-gray-400 mb-1">تصريح دخول الفرع (التعليمات / البوابات)</label>
+                            <textarea id="brPermit" rows="2" placeholder="أكواد الدخول، التصاريح اللازمة، أو أي تعليمات تسليم للمندوب..." required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500"></textarea>
+                        </div>
+                        <div class="md:col-span-2 flex justify-end mt-2">
+                            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition">حفظ بيانات الفرع</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- جدول عرض الفروع المضافة -->
+                <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
+                        <h3 class="text-lg font-bold text-white"><i class="fas fa-list-alt text-blue-400 ml-2"></i> الفروع المسجلة بالدليل</h3>
+                        <input type="text" id="searchBranchInput" placeholder="بحث باسم الفرع..." class="px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-white outline-none focus:border-blue-500 w-full max-w-xs">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm">
+                            <thead class="bg-gray-700 text-gray-300">
+                                <tr>
+                                    <th class="p-3">اسم الفرع</th>
+                                    <th class="p-3">مواعيد العمل</th>
+                                    <th class="p-3">المدير</th>
+                                    <th class="p-3 text-center">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="branchesTableBody" class="divide-y divide-gray-700">
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-gray-500">جاري التحميل...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. تاب إدارة الأوردرات -->
             <section id="orderManageTab" class="tab-content block">
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                     <h2 class="text-2xl font-bold">إدارة الأوردرات والتوزيع</h2>
@@ -302,7 +376,6 @@
                     </div>
                 </div>
                 
-                <!-- رسالة التوجيه المبدئية -->
                 <div id="uploadPromptContainer" class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center shadow-lg">
                     <div class="text-gray-500 py-10">
                         <i class="fas fa-boxes text-5xl mb-4 opacity-50"></i>
@@ -311,7 +384,7 @@
                     </div>
                 </div>
 
-                <!-- لوحة تقسيم الفروع قبل العرض (تظهر بعد الرفع) -->
+                <!-- لوحة تقسيم الفروع قبل العرض -->
                 <div id="sheetMappingWizard" class="hidden bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mt-4">
                     <h3 class="text-xl font-bold mb-4 text-blue-400 border-b border-gray-700 pb-3">
                         <i class="fas fa-cogs ml-2"></i> إعداد وتقسيم فروع الشيت
@@ -408,7 +481,6 @@
                 <div class="bg-gray-800 p-6 rounded-xl border border-orange-900/50 mb-6 shadow-lg">
                     <h3 class="text-lg font-bold mb-4">إنشاء أوردر معلق (مرفوض / مرتجع) لمندوب</h3>
                     
-                    <!-- فورم الإنشاء الجديد المتسلسل -->
                     <form id="orderForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         
                         <div>
@@ -527,18 +599,21 @@
             <section id="settingsTab" class="tab-content hidden">
                 <h2 class="text-2xl font-bold mb-6">إعدادات النظام</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- إعدادات Odoo اللي طلبت تعديلها -->
                     <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
                         <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
                             <i class="fas fa-database"></i> بيانات ربط Odoo
                         </h3>
                         <form id="odooSettingsForm" class="space-y-4">
                             <div>
-                                <label class="block text-sm text-gray-400 mb-1">البريد الإلكتروني لأودو</label>
-                                <input type="email" id="odooEmail" placeholder="email@example.com" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                                <label class="block text-sm text-gray-400 mb-1">اسم المستخدم لأودو (بدون @)</label>
+                                <!-- تم تغيير الـ Type لـ text عشان ميتطلبش @ -->
+                                <input type="text" id="odooUsername" placeholder="مثال: username123" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-400 mb-1">كلمة المرور</label>
-                                <input type="password" id="odooPassword" placeholder="كلمة المرور" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                                <input type="password" id="odooPassword" placeholder="كلمة المرور" required class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
                             </div>
                             <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold shadow">
                                 حفظ بيانات أودو
@@ -555,6 +630,35 @@
                             تعطيل المنصة
                         </button>
                     </div>
+
+                    <!-- قسم مديري الشيفت (الجديد) اللي طلبته -->
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1 md:col-span-2 mt-2">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-blue-400">
+                            <i class="fas fa-user-tie"></i> إدارة مديري الشيفت
+                        </h3>
+                        <form id="shiftManagerForm" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <input type="text" id="smName" placeholder="اسم المدير" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <input type="text" id="smPhone" placeholder="رقم الهاتف" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <input type="text" id="smWhatsapp" placeholder="رقم الواتساب" required class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow transition">إضافة مدير</button>
+                        </form>
+                        <div class="overflow-x-auto rounded-lg border border-gray-700">
+                            <table class="w-full text-right text-sm">
+                                <thead class="bg-gray-700 text-gray-300">
+                                    <tr>
+                                        <th class="p-3">الاسم</th>
+                                        <th class="p-3">رقم الهاتف</th>
+                                        <th class="p-3">الواتساب</th>
+                                        <th class="p-3 text-center">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="shiftManagersTableBody" class="divide-y divide-gray-700">
+                                    <tr><td colspan="4" class="p-4 text-center text-gray-500">جاري التحميل...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 
