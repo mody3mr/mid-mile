@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mid-mile-v2';
+const CACHE_NAME = 'mid-mile-v3'; // تم تحديث الإصدار لإجبار الموبايلات على قراءة التعديلات الجديدة
 const urlsToCache = [
   './',
   './index.html',
