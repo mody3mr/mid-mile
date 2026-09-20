@@ -15,7 +15,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const loggedInUser = JSON.parse(localStorage.getItem('loggedInUser'));
 
-// لو مش مسجل يحوله لصفحة الدخول اللي في نفس المسار
 if (!loggedInUser) {
     window.location.replace("index.html");
 } else {
@@ -59,7 +58,212 @@ function showToast(message, type = 'error') {
     }, 3000);
 }
 
-// تغيير الـ PIN
+// -------------------------------------------------------------------
+// 1. جلب وحفظ دليل الفروع في الميموري لسرعة الفتح
+// -------------------------------------------------------------------
+let allBranchesDir = [];
+onSnapshot(collection(db, "branchesDirectory"), (snapshot) => {
+    allBranchesDir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+});
+
+// دالة فتح مودال تفاصيل الفرع
+window.viewBranchDetails = function(branchName) {
+    if (!branchName) return showToast("اسم الفرع غير مسجل للأوردر");
+    
+    // البحث عن الفرع في الدليل بالاسم
+    const branchInfo = allBranchesDir.find(b => b.name.trim().toLowerCase() === branchName.trim().toLowerCase());
+    
+    if (!branchInfo) {
+        return showToast("بيانات هذا الفرع غير مسجلة في الدليل من قبل الإدارة", "error");
+    }
+
+    document.getElementById('bmName').innerText = branchInfo.name || 'بدون اسم';
+    document.getElementById('bmHours').innerText = `مواعيد العمل: ${branchInfo.hours || 'غير محدد'}`;
+    document.getElementById('bmLocation').innerText = branchInfo.location || 'غير متوفر';
+    document.getElementById('bmManager').innerText = branchInfo.manager || 'غير متوفر';
+    document.getElementById('bmPermit').innerText = branchInfo.permit || 'لا توجد تعليمات خاصة';
+
+    const staffContainer = document.getElementById('bmStaffContainer');
+    staffContainer.innerHTML = '';
+
+    if (branchInfo.staff && branchInfo.staff.length > 0) {
+        branchInfo.staff.forEach(member => {
+            const normalizedPhone = String(member.phone || '').replace(/\D/g, '').replace(/^20/, '').replace(/^0/, '');
+            
+            staffContainer.innerHTML += `
+                <div class="bg-gray-900 p-3 rounded-lg border border-gray-700 flex flex-col gap-2">
+                    <span class="font-bold text-gray-300 text-sm"><i class="fas fa-user-circle text-gray-500 mr-1"></i> ${member.name}</span>
+                    <div class="flex gap-2">
+                        <a href="tel:+20${normalizedPhone}" class="flex-1 bg-blue-900/50 hover:bg-blue-600 text-blue-300 hover:text-white py-1.5 rounded text-xs text-center transition border border-blue-800 font-bold">
+                            <i class="fas fa-phone mr-1"></i> اتصال
+                        </a>
+                        <a href="https://wa.me/20${normalizedPhone}" target="_blank" class="flex-1 bg-green-900/50 hover:bg-green-600 text-green-300 hover:text-white py-1.5 rounded text-xs text-center transition border border-green-800 font-bold">
+                            <i class="fab fa-whatsapp mr-1"></i> واتساب
+                        </a>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        staffContainer.innerHTML = '<p class="text-xs text-gray-500">لا يوجد موظفين مسجلين للتواصل المباشر</p>';
+    }
+
+    document.getElementById('branchModal').classList.remove('hidden');
+};
+
+
+// -------------------------------------------------------------------
+// 2. جلب مديري الشيفت
+// -------------------------------------------------------------------
+onSnapshot(collection(db, "shiftManagers"), (snapshot) => {
+    const managersContainer = document.getElementById('managersContainer');
+    if (!managersContainer) return;
+    managersContainer.innerHTML = '';
+    
+    if (snapshot.empty) {
+        managersContainer.innerHTML = '<span class="text-xs text-gray-500">لا يوجد مديرين</span>';
+        return;
+    }
+
+    snapshot.forEach((docSnap) => {
+        const manager = docSnap.data();
+        managersContainer.innerHTML += `
+            <button onclick="openManagerModal('${escapeHtml(manager.name)}', '${escapeHtml(manager.whatsapp)}', '${escapeHtml(manager.image)}')" class="w-8 h-8 rounded-full overflow-hidden border border-gray-600 shadow transition hover:scale-110 focus:outline-none" title="${escapeHtml(manager.name)}">
+                <img src="${escapeHtml(manager.image)}" onerror="this.src='breadfast-logo (1).png'" class="w-full h-full object-cover">
+            </button>
+        `;
+    });
+}, (error) => {
+    const managersContainer = document.getElementById('managersContainer');
+    if (managersContainer) managersContainer.innerHTML = '<span class="text-xs text-red-400">خطأ بالتحميل</span>';
+});
+
+
+// -------------------------------------------------------------------
+// 3. جلب الأوردرات وعرضها
+// -------------------------------------------------------------------
+const ordersContainer = document.getElementById('ordersContainer');
+let allOrders = [];
+
+function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+function getStatusStyle(status) {
+    switch (String(status || 'draft').toLowerCase()) {
+        case 'draft': return '<span class="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs border border-gray-600 font-bold">مسودة / تجهيز</span>';
+        case 'waiting': return '<span class="px-2 py-1 bg-yellow-900/30 text-yellow-500 rounded text-xs border border-yellow-700/50 font-bold">انتظار</span>';
+        case 'ready': return '<span class="px-2 py-1 bg-blue-900/30 text-blue-400 rounded text-xs border border-blue-700/50 font-bold">جاهز للتوصيل</span>';
+        case 'done': return '<span class="px-2 py-1 bg-green-900/30 text-green-400 rounded text-xs border border-green-700/50 font-bold"><i class="fas fa-check mr-1"></i> مسلم</span>';
+        case 'pending': return '<span class="px-2 py-1 bg-orange-900/30 text-orange-400 rounded text-xs border border-orange-700/50 font-bold"><i class="fas fa-exclamation-circle mr-1"></i> معلق/مرفوض</span>';
+        case 'resolved': return '<span class="px-2 py-1 bg-teal-900/30 text-teal-400 rounded text-xs border border-teal-700/50 font-bold"><i class="fas fa-check-double mr-1"></i> تمت التسوية</span>';
+        default: return `<span class="px-2 py-1 bg-gray-600 text-white rounded text-xs font-bold">${status}</span>`;
+    }
+}
+
+function renderOrders(ordersToRender) {
+    if (!ordersContainer) return;
+    ordersContainer.innerHTML = '';
+    document.getElementById('ordersCount').innerText = ordersToRender.length;
+    
+    if (ordersToRender.length === 0) {
+        return ordersContainer.innerHTML = '<div class="text-center text-gray-500 py-8 border border-gray-700 rounded-xl border-dashed mt-4">لا توجد أوردرات في هذه القائمة.</div>';
+    }
+    
+    ordersToRender.forEach(order => {
+        const branchName = order.branch || 'فرع غير محدد';
+        
+        const div = document.createElement('div');
+        div.className = 'bg-gray-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start border border-gray-700 mb-4 shadow-sm';
+        
+        div.innerHTML = `
+            <div class="w-full">
+                <!-- اسم الفرع وزرار التفاصيل -->
+                <div class="flex justify-between items-start mb-3 border-b border-gray-700 pb-3">
+                    <h4 class="font-bold text-green-400 text-lg leading-tight w-2/3"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(branchName)}</h4>
+                    ${branchName !== 'فرع غير محدد' ? `<button onclick="viewBranchDetails('${escapeHtml(branchName)}')" class="bg-gray-700 hover:bg-gray-600 text-blue-400 text-xs px-3 py-1.5 rounded-lg border border-gray-600 transition shadow"><i class="fas fa-info-circle mr-1"></i> الاستلام</button>` : ''}
+                </div>
+                
+                <!-- بيانات الأوردر -->
+                <div class="bg-gray-900/50 p-3 rounded-lg">
+                    <h5 class="font-bold text-yellow-400 mb-2">${escapeHtml(order.productName || 'منتج غير معروف')}</h5>
+                    <div class="text-sm text-gray-400 flex flex-wrap gap-3">
+                        <span class="bg-gray-800 px-2 py-1 rounded" dir="ltr"><i class="fas fa-barcode"></i> ${escapeHtml(order.barcode || 'غير متوفر')}</span>
+                        ${order.quantity ? `<span class="bg-blue-900/30 text-blue-300 px-2 py-1 rounded">الكمية: ${escapeHtml(order.quantity)}</span>` : ''}
+                    </div>
+                    ${order.notes ? `<div class="mt-2 text-xs text-orange-400 bg-orange-900/20 p-2 rounded"><i class="fas fa-comment-dots mr-1"></i> ملاحظات: ${escapeHtml(order.notes)}</div>` : ''}
+                </div>
+                
+                <!-- الحالة -->
+                <div class="mt-3 flex justify-end w-full">
+                    ${getStatusStyle(order.status)}
+                </div>
+            </div>
+        `;
+        ordersContainer.appendChild(div);
+    });
+}
+
+if (ordersContainer) {
+    const q = query(collection(db, "orders"), where("hrid", "==", loggedInUser.hrid));
+    onSnapshot(q, (snapshot) => {
+        allOrders = [];
+        snapshot.forEach((d) => allOrders.push({ id: d.id, ...d.data() }));
+        
+        // فرز بحيث الأحدث يظهر فوق
+        allOrders.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        
+        renderOrders(allOrders);
+        
+        // إحصائيات المندوب
+        document.getElementById('statDeliveries').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'done' || o.status?.toLowerCase() === 'resolved').length;
+        document.getElementById('statRejected').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'pending').length;
+        document.getElementById('statAttendance').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'waiting').length;
+        document.getElementById('statAbsence').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'ready').length;
+        document.getElementById('statDelays').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'draft').length;
+    });
+
+    document.getElementById('orderFilter')?.addEventListener('change', (e) => {
+        const v = e.target.value;
+        if (v === 'all') {
+            renderOrders(allOrders);
+        } else if (v === 'done') {
+            renderOrders(allOrders.filter(o => o.status?.toLowerCase() === 'done' || o.status?.toLowerCase() === 'resolved'));
+        } else if (v === 'pending') {
+            renderOrders(allOrders.filter(o => o.status?.toLowerCase() === 'pending'));
+        }
+    });
+}
+
+document.querySelectorAll('.order-view-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+        const view = button.dataset.orderView;
+        const filter = document.getElementById('orderFilter');
+        
+        const matchingOrders = view === 'active'
+            ? allOrders.filter((order) => !['done', 'resolved', 'pending'].includes(String(order.status || '').toLowerCase()))
+            : view === 'completed'
+                ? allOrders.filter((order) => ['done', 'resolved', 'pending'].includes(String(order.status || '').toLowerCase()))
+                : allOrders;
+                
+        if (filter) filter.value = 'all';
+        renderOrders(matchingOrders);
+        
+        document.querySelectorAll('.order-view-btn').forEach((item) => {
+            item.classList.remove('bg-blue-600', 'text-white', 'shadow');
+            item.classList.add('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
+        });
+        button.classList.remove('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
+        button.classList.add('bg-blue-600', 'text-white', 'shadow');
+        
+        document.getElementById('ordersContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+
+
+// -------------------------------------------------------------------
+// 4. تغيير الـ PIN والتحكم من النظام
+// -------------------------------------------------------------------
 document.getElementById('savePinBtn')?.addEventListener('click', async () => {
     const oldPin = document.getElementById('oldPin').value.trim();
     const newPin = document.getElementById('newPin').value.trim();
@@ -67,8 +271,7 @@ document.getElementById('savePinBtn')?.addEventListener('click', async () => {
 
     if (oldPin.length < 4 || newPin.length < 4) return showToast("الرقم السري يجب أن لا يقل عن 4 أرقام", "error");
 
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-    btn.disabled = true;
+    setBusy(btn, true, "جاري الحفظ...");
 
     try {
         const userRef = doc(db, "users", loggedInUser.hrid);
@@ -91,116 +294,20 @@ document.getElementById('savePinBtn')?.addEventListener('click', async () => {
     } catch (error) {
         showToast("حدث خطأ أثناء الاتصال بالخادم", "error");
     } finally {
-        btn.innerHTML = 'حفظ التغييرات';
-        btn.disabled = false;
+        setBusy(btn, false);
     }
 });
 
-// جلب المديرين
-onSnapshot(collection(db, "managers"), (snapshot) => {
-    const managersContainer = document.getElementById('managersContainer');
-    if (!managersContainer) return;
-    managersContainer.innerHTML = '';
-    
-    if (snapshot.empty) {
-        managersContainer.innerHTML = '<span class="text-xs text-gray-500">لا يوجد مديرين حالياً</span>';
-        return;
-    }
-
-    snapshot.forEach((doc) => {
-        const manager = doc.data();
-        const phone = String(manager.phone || '').replace(/\D/g, '').replace(/^20/, '').replace(/^0/, '');
-        const btn = document.createElement('button');
-        btn.className = 'text-xs font-medium text-indigo-400 hover:text-indigo-300 transition underline underline-offset-2';
-        btn.innerText = manager.name || 'مدير الشيفت';
-        btn.onclick = () => window.openManagerModal(manager.name || 'مدير الشيفت', phone);
-        managersContainer.appendChild(btn);
-    });
-}, (error) => {
-    const managersContainer = document.getElementById('managersContainer');
-    if (managersContainer) managersContainer.innerHTML = '<span class="text-xs text-red-400">خطأ بالتحميل</span>';
-});
-
-// جلب الأوردرات
-const ordersContainer = document.getElementById('ordersContainer');
-let allOrders = [];
-
-function getStatusStyle(status) {
-    switch (String(status || 'draft').toLowerCase()) {
-        case 'draft': return '<span class="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs border border-gray-600">مسودة</span>';
-        case 'waiting': return '<span class="px-2 py-1 bg-yellow-900/30 text-yellow-500 rounded text-xs border border-yellow-700/50">انتظار</span>';
-        case 'ready': return '<span class="px-2 py-1 bg-blue-900/30 text-blue-400 rounded text-xs border border-blue-700/50">جاهز</span>';
-        case 'done': return '<span class="px-2 py-1 bg-green-900/30 text-green-400 rounded text-xs border border-green-700/50">مسلم</span>';
-        case 'rejected': return '<span class="px-2 py-1 bg-red-900/30 text-red-400 rounded text-xs border border-red-700/50">مرفوض</span>';
-        default: return `<span class="px-2 py-1 bg-gray-600 text-white rounded text-xs">${status}</span>`;
-    }
-}
-
-function renderOrders(ordersToRender) {
-    if (!ordersContainer) return;
-    ordersContainer.innerHTML = '';
-    document.getElementById('ordersCount').innerText = ordersToRender.length;
-    if (ordersToRender.length === 0) return ordersContainer.innerHTML = '<div class="text-center text-gray-500 py-8">لا توجد أوردرات حالياً.</div>';
-    
-    ordersToRender.forEach(order => {
-        const div = document.createElement('div');
-        div.className = 'bg-gray-800 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-700 mb-3 hover:bg-gray-700 transition shadow-sm';
-        const escapeHtml = (value) => String(value ?? '').replace(/[<>&"']/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#039;' })[char]);
-        div.innerHTML = `<div><h4 class="font-bold text-white mb-1">${escapeHtml(order.productName || 'منتج')}</h4><div class="text-sm text-gray-400"><i class="fas fa-barcode ml-1"></i> الباركود: ${escapeHtml(order.barcode || 'غير متوفر')}</div></div><div class="mt-3 md:mt-0">${getStatusStyle(order.status || 'draft')}</div>`;
-        ordersContainer.appendChild(div);
-    });
-}
-
-if (ordersContainer) {
-    const q = query(collection(db, "orders"), where("hrid", "==", loggedInUser.hrid));
-    onSnapshot(q, (snapshot) => {
-        allOrders = [];
-        snapshot.forEach((d) => allOrders.push({ id: d.id, ...d.data() }));
-        renderOrders(allOrders);
-        document.getElementById('statDeliveries').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'done').length;
-        document.getElementById('statRejected').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'rejected').length;
-        document.getElementById('statAttendance').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'waiting').length;
-        document.getElementById('statAbsence').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'ready').length;
-        document.getElementById('statDelays').innerText = allOrders.filter(o => o.status?.toLowerCase() === 'draft').length;
-    });
-
-    document.getElementById('orderFilter')?.addEventListener('change', (e) => {
-        const v = e.target.value;
-        renderOrders(v === 'all' ? allOrders : allOrders.filter(o => o.status?.toLowerCase() === v));
-    });
-}
-
-document.querySelectorAll('.order-view-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-        const view = button.dataset.orderView;
-        const filter = document.getElementById('orderFilter');
-        const matchingOrders = view === 'active'
-            ? allOrders.filter((order) => !['done', 'rejected'].includes(String(order.status || '').toLowerCase()))
-            : view === 'completed'
-                ? allOrders.filter((order) => ['done', 'rejected'].includes(String(order.status || '').toLowerCase()))
-                : allOrders;
-        if (filter) filter.value = 'all';
-        renderOrders(matchingOrders);
-        document.querySelectorAll('.order-view-btn').forEach((item) => {
-            item.classList.remove('bg-blue-600', 'text-white', 'shadow');
-            item.classList.add('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
-        });
-        button.classList.remove('text-gray-400', 'hover:bg-gray-700', 'hover:text-white');
-        button.classList.add('bg-blue-600', 'text-white', 'shadow');
-        document.getElementById('ordersContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-
-// قرارات النظام (إشعارات وخروج)
 let hasLoadedSystemControls = false;
 onSnapshot(doc(db, "system", "controls"), (docSnap) => {
     if (docSnap.exists()) {
         const data = docSnap.data();
+        
         if (data.forceLogoutTrigger && hasLoadedSystemControls) {
             localStorage.removeItem('loggedInUser');
-            document.getElementById('sysMsgTitle').innerText = "تحديث النظام";
+            document.getElementById('sysMsgTitle').innerText = "طوارئ النظام";
             document.getElementById('sysMsgTitle').classList.replace("text-white", "text-red-400");
-            document.getElementById('systemMessageText').innerText = "قام مدير النظام بإنهاء جميع الجلسات. جاري تحويلك لصفحة الدخول...";
+            document.getElementById('systemMessageText').innerText = "تم إنهاء جلستك من قبل الإدارة. يرجى تسجيل الدخول مجدداً.";
             document.getElementById('closeSysMsgBtn').classList.add('hidden');
             document.getElementById('ackSysMsgBtn').classList.add('hidden');
             document.getElementById('systemMessageModal').classList.remove('hidden');
