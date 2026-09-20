@@ -1,13 +1,23 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { 
+    getFirestore, 
+    doc, 
+    getDoc, 
+    updateDoc 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 1. كود الحماية: التحقق فوراً إذا كان المستخدم مسجل دخول بالفعل
+// ==========================================
+// 1. الحماية وإعادة التوجيه التلقائي
+// ==========================================
 const savedUser = localStorage.getItem('loggedInUser');
 if (savedUser) {
     // لو مسجل دخول، يتم توجيهه للوحة التحكم فوراً ولا يمكنه البقاء في صفحة الدخول
     window.location.replace("main.html");
 }
 
+// ==========================================
+// 2. إعدادات الفايربيس
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyAOUYXOYqzk2Moc_JP6AaBObSVEoaqQdoE",
   authDomain: "mid-mile-176a4.firebaseapp.com",
@@ -21,6 +31,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// ==========================================
+// 3. تعريف عناصر الواجهة
+// ==========================================
 const hridInput = document.getElementById('hrid');
 const statusText = document.getElementById('hridStatus');
 const pinInput = document.getElementById('pincode');
@@ -31,10 +44,15 @@ let typingTimer;
 let isHridValid = false;
 let currentUserData = null;
 
+// ==========================================
+// 4. دالة الإشعارات (Toast)
+// ==========================================
 function showToast(message, type = 'error') {
     const toast = document.getElementById('toastNotification');
     const icon = document.getElementById('toastIcon');
     const msg = document.getElementById('toastMessage');
+
+    if (!toast) return;
 
     msg.textContent = message;
     toast.className = 'fixed top-0 left-1/2 transform -translate-x-1/2 transition-all duration-300 z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]';
@@ -47,15 +65,22 @@ function showToast(message, type = 'error') {
         icon.className = 'fas fa-check-circle text-green-400 text-lg';
     }
 
-    toast.classList.remove('opacity-0', '-translate-y-full');
-    toast.classList.add('opacity-100', 'translate-y-6');
+    // إظهار التوست
+    setTimeout(() => {
+        toast.classList.remove('opacity-0', '-translate-y-full');
+        toast.classList.add('opacity-100', 'translate-y-6');
+    }, 10);
 
+    // إخفاء التوست
     setTimeout(() => {
         toast.classList.remove('opacity-100', 'translate-y-6');
         toast.classList.add('opacity-0', '-translate-y-full');
     }, 3000);
 }
 
+// ==========================================
+// 5. التحقق من صحة كود المندوب (HRID)
+// ==========================================
 if (hridInput) {
     hridInput.addEventListener('input', () => {
         clearTimeout(typingTimer);
@@ -69,9 +94,10 @@ if (hridInput) {
         pinInput.value = '';
 
         if (val.length > 0) {
-            statusText.textContent = 'Checking...';
+            statusText.textContent = 'جاري التحقق...';
             statusText.className = 'text-xs mt-1 text-gray-400 h-4';
-            typingTimer = setTimeout(() => checkHrid(val), 500);
+            // تأخير بسيط لمنع الإرسال المتكرر للداتا بيز أثناء الكتابة
+            typingTimer = setTimeout(() => checkHrid(val), 600);
         }
     });
 }
@@ -81,31 +107,50 @@ async function checkHrid(hrid) {
         const docRef = doc(db, "users", hrid);
         const docSnap = await getDoc(docRef);
 
-        // Ignore a delayed response for an HR ID the user has already changed.
+        // التأكد من أن القيمة لم تتغير أثناء جلب البيانات
         if (hridInput.value.trim() !== hrid) return;
 
         if (docSnap.exists()) {
             currentUserData = docSnap.data();
             
-            const displayName = currentUserData.name ? currentUserData.name : 'HR ID verified';
-            statusText.textContent = '✓ ' + displayName;
-            statusText.className = 'text-xs mt-1 text-green-400 h-4';
+            // التحقق إذا كان الحساب معطل من قبل الإدارة
+            if (currentUserData.status === 'suspended') {
+                statusText.innerHTML = '<i class="fas fa-ban mr-1"></i> تم إيقاف هذا الحساب من الإدارة';
+                statusText.className = 'text-xs mt-1 text-red-500 h-4 font-bold';
+                return;
+            }
+            
+            const displayName = currentUserData.name ? currentUserData.name : 'تم التحقق من الحساب';
+            statusText.innerHTML = '<i class="fas fa-check-circle mr-1"></i> أهلاً، ' + escapeHtml(displayName);
+            statusText.className = 'text-xs mt-1 text-green-400 h-4 font-bold';
             
             pinInput.disabled = false;
             loginBtn.disabled = false;
             isHridValid = true;
             pinInput.focus();
         } else {
-            statusText.textContent = '✗ HR ID not found';
+            statusText.innerHTML = '<i class="fas fa-times-circle mr-1"></i> الكود غير مسجل في النظام';
             statusText.className = 'text-xs mt-1 text-red-500 h-4';
         }
     } catch (error) {
         console.error("Firebase Error: ", error);
-        statusText.textContent = '⚠️ تأكد من اتصال الإنترنت أو صلاحيات فايربيس';
+        statusText.innerHTML = '<i class="fas fa-wifi mr-1"></i> تأكد من اتصال الإنترنت';
         statusText.className = 'text-xs mt-1 text-yellow-500 h-4';
     }
 }
 
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+// ==========================================
+// 6. عملية تسجيل الدخول
+// ==========================================
 if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -113,7 +158,7 @@ if (loginForm) {
 
         const pinVal = pinInput.value.trim();
         if (pinVal.length < 4) {
-            showToast("الرقم السري قصير جداً", "error");
+            showToast("الرقم السري يجب أن يكون 4 أرقام على الأقل", "error");
             return;
         }
 
@@ -122,29 +167,47 @@ if (loginForm) {
         loginBtn.disabled = true;
 
         try {
+            // إذا كان المستخدم يملك PIN مسجل بالفعل
             if (currentUserData.pinCode) {
                 if (currentUserData.pinCode === pinVal) {
-                    localStorage.setItem('loggedInUser', JSON.stringify({hrid: hridInput.value.trim(), ...currentUserData}));
+                    // حفظ البيانات في LocalStorage
+                    localStorage.setItem('loggedInUser', JSON.stringify({
+                        hrid: hridInput.value.trim(), 
+                        ...currentUserData
+                    }));
                     
-                    // 2. التعديل هنا: استخدام replace لمنع الرجوع لصفحة الدخول
+                    // توجيه للمنصة
                     window.location.replace("main.html");
                 } else {
                     showToast("الرقم السري (PIN) غير صحيح", "error");
                 }
-            } else {
+            } 
+            // إذا كان هذا هو أول تسجيل دخول (لم يتم تعيين PIN من قبل)
+            else {
                 const hrid = hridInput.value.trim();
-                await updateDoc(doc(db, "users", hrid), { pinCode: pinVal });
-                const updatedSnap = await getDoc(doc(db, "users", hrid));
-                localStorage.setItem('loggedInUser', JSON.stringify({hrid: hrid, ...updatedSnap.data()}));
                 
-                showToast("تم إنشاء الرقم السري بنجاح!", "success");
+                // حفظ الرقم السري الجديد في قاعدة البيانات
+                await updateDoc(doc(db, "users", hrid), { 
+                    pinCode: pinVal,
+                    updatedAt: serverTimestamp() 
+                });
+                
+                const updatedSnap = await getDoc(doc(db, "users", hrid));
+                
+                localStorage.setItem('loggedInUser', JSON.stringify({
+                    hrid: hrid, 
+                    ...updatedSnap.data()
+                }));
+                
+                showToast("تم إعداد رقمك السري بنجاح!", "success");
+                
                 setTimeout(() => {
-                    // التعديل هنا أيضاً
                     window.location.replace("main.html");
-                }, 1500); 
+                }, 1000); 
             }
         } catch(error) {
-            showToast("حدث خطأ أثناء الاتصال.", "error");
+            console.error(error);
+            showToast("حدث خطأ أثناء الاتصال بالنظام.", "error");
         } finally {
             loginBtn.innerHTML = originalHTML;
             loginBtn.disabled = false;
