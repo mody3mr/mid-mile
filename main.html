@@ -49,7 +49,6 @@
                 <button type="button" data-order-view="all" class="order-view-btn w-full flex items-center gap-3 p-3 bg-blue-600 text-white rounded-lg shadow"><i class="fas fa-chart-pie w-5"></i> ملخص الأوردرات</button>
                 <button type="button" data-order-view="active" class="order-view-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition"><i class="fas fa-box-open w-5"></i> الأوردرات الحالية</button>
                 <button type="button" data-order-view="completed" class="order-view-btn w-full flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition"><i class="fas fa-history w-5"></i> الأوردرات السابقة</button>
-                <a href="#managersContainer" class="flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition"><i class="fas fa-phone-alt w-5"></i> مديرين الشيفت</a>
                 <div class="flex items-center gap-3 p-3 text-gray-500 rounded-lg bg-gray-800/50"><i class="fas fa-fingerprint w-5"></i> تسجيل الحضور <span class="text-[10px] bg-gray-700 text-gray-400 px-2 py-0.5 rounded mr-auto">قريباً</span></div>
             </nav>
         </aside>
@@ -61,19 +60,21 @@
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center"><span class="text-gray-400 text-sm">قيد الانتظار</span><span id="statAttendance" class="text-2xl font-bold text-yellow-400">0</span></div>
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center"><span class="text-gray-400 text-sm">الجاهزة</span><span id="statAbsence" class="text-2xl font-bold text-blue-400">0</span></div>
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center"><span class="text-gray-400 text-sm">المسودات</span><span id="statDelays" class="text-2xl font-bold text-gray-300">0</span></div>
-                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center col-span-2 md:col-span-1"><span class="text-gray-400 text-sm">المرفوضة</span><span id="statRejected" class="text-2xl font-bold text-orange-400">0</span></div>
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col items-center col-span-2 md:col-span-1"><span class="text-gray-400 text-sm">المرفوضة (معلقة)</span><span id="statRejected" class="text-2xl font-bold text-orange-400">0</span></div>
             </div>
 
             <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                    <h2 class="text-xl font-bold flex items-center gap-2">الأوردرات الحالية <span id="ordersCount" class="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">0</span></h2>
+                    <h2 class="text-xl font-bold flex items-center gap-2">أوردرات وعناوين اليوم <span id="ordersCount" class="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">0</span></h2>
                     <select id="orderFilter" class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-blue-500 w-full md:w-auto">
                         <option value="all">الكل</option>
                         <option value="done">المسلمة فقط</option>
-                        <option value="rejected">المرفوضة فقط</option>
+                        <option value="pending">المعلقة والمرفوضة</option>
                     </select>
                 </div>
-                <div id="ordersContainer" class="space-y-4"><div class="text-center text-gray-500 py-8">جاري الجلب...</div></div>
+                <div id="ordersContainer" class="space-y-4">
+                    <div class="text-center text-gray-500 py-8">جاري الجلب...</div>
+                </div>
             </div>
         </main>
     </div>
@@ -100,7 +101,7 @@
         </div>
     </footer>
 
-    <!-- النوافذ المنبثقة (Modals) -->
+    <!-- ===================================== النوافذ المنبثقة (Modals) ===================================== -->
     
     <!-- 1. قائمة الإعدادات -->
     <div id="userSettingsModal" class="hidden fixed inset-0 bg-black/60 z-50 flex justify-center items-start pt-20">
@@ -110,7 +111,6 @@
             </div>
             <div class="space-y-3">
                 <button onclick="openChangePinModal()" class="w-full text-right p-2 hover:bg-gray-700 rounded-lg flex items-center gap-3 transition"><i class="fas fa-key text-gray-400 w-5"></i> تغيير الـ PIN</button>
-                <button onclick="toggleTheme()" class="w-full text-right p-2 hover:bg-gray-700 rounded-lg flex items-center gap-3 transition"><i class="fas fa-adjust text-gray-400 w-5"></i> تفعيل المظهر الفاتح</button>
                 <button onclick="logout()" class="w-full text-right p-2 hover:bg-red-900/50 text-red-400 rounded-lg flex items-center gap-3 border-t border-gray-700 pt-3 transition"><i class="fas fa-sign-out-alt w-5"></i> تسجيل الخروج</button>
             </div>
         </div>
@@ -141,19 +141,73 @@
         </div>
     </div>
 
-    <!-- 4. تواصل مع مدير الشيفت -->
-    <div id="managerModal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-        <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-sm w-full p-6 text-center">
-            <button onclick="closeManagerModal()" class="absolute top-4 left-4 text-gray-400"><i class="fas fa-times"></i></button>
-            <h3 id="managerName" class="text-xl font-bold mb-6 mt-4 text-white">الاسم</h3>
+    <!-- 4. تواصل مع مدير الشيفت (المحدث بالصورة) -->
+    <div id="managerModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl relative">
+            <button onclick="closeManagerModal()" class="absolute top-4 left-4 text-gray-400 hover:text-white transition"><i class="fas fa-times text-xl"></i></button>
+            
+            <div class="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden border-2 border-indigo-500 shadow-lg">
+                <img id="managerImage" src="" alt="صورة المدير" class="w-full h-full object-cover bg-gray-700" onerror="this.src='breadfast-logo (1).png'">
+            </div>
+            
+            <h3 id="managerName" class="text-xl font-bold mb-2 text-white">الاسم</h3>
+            <p class="text-sm text-gray-400 mb-6">مدير الشيفت</p>
+            
             <div class="flex gap-3 justify-center">
-                <a id="managerWhatsapp" href="#" target="_blank" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 font-bold"><i class="fab fa-whatsapp"></i> واتساب</a>
-                <a id="managerPhone" href="#" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 font-bold"><i class="fas fa-phone"></i> اتصال</a>
+                <a id="managerWhatsapp" href="#" target="_blank" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg flex items-center justify-center gap-2 font-bold transition shadow">
+                    <i class="fab fa-whatsapp text-lg"></i> واتساب
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- استدعاء ملف الجافاسكريبت -->
+    <!-- 5. تفاصيل الفرع وموظفي الاستلام (الجديد كلياً) -->
+    <div id="branchModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-md w-full p-0 shadow-2xl relative overflow-hidden flex flex-col max-h-[85vh]">
+            
+            <!-- هيدر النافذة -->
+            <div class="p-4 bg-gray-900/80 border-b border-gray-700 flex justify-between items-start">
+                <div>
+                    <h3 id="bmName" class="text-xl font-bold text-green-400 leading-tight pr-8">اسم الفرع</h3>
+                    <p id="bmHours" class="text-xs text-gray-400 mt-1"><i class="fas fa-clock mr-1"></i> مواعيد العمل: --</p>
+                </div>
+                <button onclick="closeBranchModal()" class="text-gray-400 hover:text-white transition absolute top-4 left-4">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- محتوى النافذة القابل للتمرير -->
+            <div class="p-5 overflow-y-auto flex-1 space-y-5">
+                
+                <!-- اللوكيشن وتصريح الدخول -->
+                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700 shadow-inner">
+                    <p class="text-xs font-bold text-gray-500 mb-1">اللوكيشن أو العنوان</p>
+                    <p id="bmLocation" class="text-sm text-blue-300 font-medium select-all break-words">--</p>
+                </div>
+
+                <div class="bg-orange-900/20 p-3 rounded-lg border border-orange-900/50 shadow-inner">
+                    <p class="text-xs font-bold text-orange-500 mb-1"><i class="fas fa-exclamation-triangle"></i> تعليمات الدخول / الأكواد</p>
+                    <p id="bmPermit" class="text-sm text-gray-300 whitespace-pre-wrap">--</p>
+                </div>
+
+                <!-- مدير الفرع -->
+                <div>
+                    <h4 class="text-sm font-bold text-white mb-2 border-b border-gray-700 pb-1">مدير الفرع</h4>
+                    <p id="bmManager" class="text-sm text-gray-300 bg-gray-900 p-2 rounded border border-gray-700">--</p>
+                </div>
+
+                <!-- الموظفين وزرار الاتصال والواتساب -->
+                <div>
+                    <h4 class="text-sm font-bold text-white mb-2 border-b border-gray-700 pb-1">موظفي الاستلام المتاحين</h4>
+                    <div id="bmStaffContainer" class="space-y-2">
+                        <!-- يتم الحقن من الجافاسكريبت -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
     
     <script>
@@ -163,16 +217,28 @@
             sidebar.classList.toggle('hidden');
         });
         
-        function toggleUserSettings() { document.getElementById('userSettingsModal').classList.toggle('hidden'); }
+        function toggleUserSettings() { 
+            document.getElementById('userSettingsModal').classList.toggle('hidden'); 
+        }
         
-        function openManagerModal(name, phone) {
+        // المودال الخاص بمدير الشيفت
+        window.openManagerModal = function(name, whatsapp, image) {
             document.getElementById('managerName').innerText = name;
-            const normalizedPhone = String(phone || '').replace(/\D/g, '').replace(/^20/, '').replace(/^0/, '');
+            document.getElementById('managerImage').src = image || 'breadfast-logo (1).png';
+            
+            const normalizedPhone = String(whatsapp || '').replace(/\D/g, '').replace(/^20/, '').replace(/^0/, '');
             document.getElementById('managerWhatsapp').href = normalizedPhone ? `https://wa.me/20${normalizedPhone}` : '#';
-            document.getElementById('managerPhone').href = normalizedPhone ? `tel:+20${normalizedPhone}` : '#';
+            
             document.getElementById('managerModal').classList.remove('hidden');
         }
-        function closeManagerModal() { document.getElementById('managerModal').classList.add('hidden'); }
+        window.closeManagerModal = function() { 
+            document.getElementById('managerModal').classList.add('hidden'); 
+        }
+
+        // المودال الخاص بالفروع
+        window.closeBranchModal = function() {
+            document.getElementById('branchModal').classList.add('hidden');
+        }
         
         function openChangePinModal() {
             toggleUserSettings();
@@ -184,14 +250,8 @@
             document.getElementById('newPin').value = '';
         }
         
-        function toggleTheme() {
-            document.documentElement.classList.toggle('dark');
-            toggleUserSettings();
-        }
-        
         function logout() { 
             localStorage.removeItem('loggedInUser'); 
-            // التوجيه لصفحة تسجيل الدخول اللي موجودة في المسار الرئيسي بره
             window.location.href = 'index.html'; 
         }
     </script>
