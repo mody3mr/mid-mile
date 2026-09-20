@@ -13,13 +13,19 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
-                extend: { colors: { brand: { 500: '#5c6bc0', 600: '#4f46e5' } } }
+                extend: { 
+                    colors: { 
+                        brand: { 500: '#5c6bc0', 600: '#4f46e5' } 
+                    } 
+                }
             }
         }
     </script>
@@ -27,14 +33,18 @@
 <body class="bg-gray-900 flex items-center justify-center min-h-screen font-sans overflow-hidden">
 
     <!-- نظام الإشعارات (Toast) -->
-    <div id="toastNotification" class="fixed top-0 left-1/2 transform -translate-x-1/2 transition-all duration-300 opacity-0 -translate-y-full z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]">
+    <div 
+        id="toastNotification" 
+        class="fixed top-0 left-1/2 transform -translate-x-1/2 transition-all duration-300 opacity-0 -translate-y-full z-[100] flex items-center gap-3 px-6 py-3 rounded-xl shadow-2xl font-bold text-sm pointer-events-none w-max max-w-[90%]"
+    >
         <i id="toastIcon" class="fas"></i>
         <span id="toastMessage"></span>
     </div>
 
+    <!-- كارت تسجيل الدخول -->
     <div class="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full max-w-sm flex flex-col items-center border border-gray-700">
         
-        <!-- تعديل اللوجو عشان يعرض الصورة بتاعتك -->
+        <!-- اللوجو -->
         <div class="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-5 shadow-lg overflow-hidden p-2">
             <img src="breadfast-logo (1).png" alt="Logo" class="w-full h-full object-contain">
         </div>
@@ -43,57 +53,95 @@
         <p class="text-xs text-gray-400 mb-8">تسجيل الدخول إلى نظام المناديب</p>
 
         <form id="loginForm" class="w-full space-y-5">
+            
+            <!-- حقل الـ HRID -->
             <div>
-                <label class="block text-[10px] font-bold text-indigo-400 mb-1 tracking-wider uppercase">HR ID</label>
-                <input type="text" id="hrid" placeholder="e.g. 12345" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white transition text-left" dir="ltr">
+                <label class="block text-[10px] font-bold text-indigo-400 mb-1 tracking-wider uppercase">
+                    كود المندوب (HR ID)
+                </label>
+                <input 
+                    type="text" 
+                    id="hrid" 
+                    placeholder="e.g. 12345" 
+                    class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white transition text-left" 
+                    dir="ltr"
+                >
                 <p id="hridStatus" class="text-xs mt-1 text-gray-400 h-4 font-medium transition-colors"></p>
             </div>
 
+            <!-- حقل الـ PIN -->
             <div>
-                <label class="block text-[10px] font-bold text-indigo-400 mb-1 tracking-wider uppercase">PIN (ALPHANUMERIC)</label>
-                <input type="password" id="pincode" placeholder="Enter PIN" disabled class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white transition disabled:opacity-40 disabled:cursor-not-allowed text-center tracking-widest text-lg" dir="ltr">
+                <label class="block text-[10px] font-bold text-indigo-400 mb-1 tracking-wider uppercase">
+                    الرقم السري (PIN)
+                </label>
+                <input 
+                    type="password" 
+                    id="pincode" 
+                    placeholder="Enter PIN" 
+                    disabled 
+                    class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white transition disabled:opacity-40 disabled:cursor-not-allowed text-center tracking-widest text-lg font-mono" 
+                    dir="ltr"
+                >
             </div>
 
-            <button type="submit" id="loginBtn" disabled class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-2">
-                <i class="fas fa-arrow-right"></i> تسجيل الدخول
+            <!-- زر تسجيل الدخول -->
+            <button 
+                type="submit" 
+                id="loginBtn" 
+                disabled 
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-2 text-lg"
+            >
+                <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
             </button>
         </form>
 
+        <!-- زر إعادة تعيين الرقم السري -->
         <div class="flex justify-center mt-8 border-t border-gray-700 pt-6 w-full">
-            <button type="button" onclick="openResetModal()" class="flex flex-col items-center gap-2 text-gray-400 hover:text-white transition">
-                <div class="w-10 h-10 rounded-full bg-green-900/30 flex items-center justify-center border border-green-900/50">
-                    <i class="fas fa-sync-alt text-green-400"></i>
+            <button type="button" onclick="openResetModal()" class="flex flex-col items-center gap-2 text-gray-400 hover:text-white transition group">
+                <div class="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center border border-gray-600 group-hover:border-green-500 transition">
+                    <i class="fas fa-headset text-gray-400 group-hover:text-green-400"></i>
                 </div>
-                <span class="text-[10px] uppercase font-bold tracking-wider">Reset PIN</span>
+                <span class="text-[10px] uppercase font-bold tracking-wider">نسيت الرقم السري؟</span>
             </button>
         </div>
     </div>
 
-    <!-- Popup التواصل مع الإدارة -->
-    <div id="resetModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <!-- Popup التواصل مع الإدارة لإعادة تعيين الـ PIN -->
+    <div id="resetModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
         <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl relative">
             <button onclick="closeResetModal()" class="absolute top-4 left-4 text-gray-400 hover:text-white transition">
                 <i class="fas fa-times text-xl"></i>
             </button>
-            <div class="w-16 h-16 bg-gray-700 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl text-indigo-500 shadow-inner">
+            
+            <div class="w-16 h-16 bg-gray-900 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl text-indigo-500 shadow-inner border border-gray-700">
                 <i class="fas fa-user-shield"></i>
             </div>
+            
             <h3 class="text-xl font-bold mb-2 text-white">التواصل مع الإدارة</h3>
-            <p class="text-sm text-gray-400 mb-6">لإعادة تعيين الرقم السري الخاص بك، يرجى التواصل مع مدير النظام.</p>
-            <a href="https://wa.me/201094264296" target="_blank" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition shadow-lg">
-                <i class="fab fa-whatsapp text-xl"></i> تواصل عبر واتساب
+            <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+                لإعادة تعيين الرقم السري الخاص بك، يرجى التواصل مع مدير النظام لتصفير الـ PIN الخاص بك.
+            </p>
+            
+            <a href="https://wa.me/201094264296" target="_blank" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition shadow-lg text-lg border border-green-500">
+                <i class="fab fa-whatsapp text-2xl"></i> تواصل عبر واتساب
             </a>
         </div>
     </div>
 
+    <!-- دوال التحكم في النوافذ المنبثقة -->
     <script>
-        function openResetModal() { document.getElementById('resetModal').classList.remove('hidden'); }
-        function closeResetModal() { document.getElementById('resetModal').classList.add('hidden'); }
+        function openResetModal() { 
+            document.getElementById('resetModal').classList.remove('hidden'); 
+        }
+        function closeResetModal() { 
+            document.getElementById('resetModal').classList.add('hidden'); 
+        }
     </script>
     
+    <!-- استدعاء ملف البرمجة -->
     <script type="module" src="app-auth.js"></script>
 
-    <!-- تفعيل ملف الـ Service Worker -->
+    <!-- تفعيل ملف الـ Service Worker (للأوفلاين وتطبيق الموبايل) -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
