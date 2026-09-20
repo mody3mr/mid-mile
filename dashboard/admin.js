@@ -30,7 +30,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // ==========================================
-// مراجع قواعد البيانات (Database Refs)
+// مراجع قواعد البيانات (Database References)
 // ==========================================
 const usersRef = collection(db, "users");
 const ordersRef = collection(db, "orders");
@@ -58,9 +58,8 @@ let assignedReps = {};
 let allDirectoryBranches = [];
 
 // ==========================================
-// دوال مساعدة (Helper Functions)
+// دوال مساعدة وتنظيف (Helper Functions)
 // ==========================================
-
 function getElement(id) {
     return document.getElementById(id);
 }
@@ -96,13 +95,11 @@ function showToast(message, type = "error") {
         icon.className = "fas fa-exclamation-circle text-red-400 text-lg";
     }
 
-    // إظهار التوست
     setTimeout(() => {
         toast.classList.remove("opacity-0", "-translate-y-4");
         toast.classList.add("opacity-100", "translate-y-0");
     }, 10);
 
-    // إخفاء التوست
     clearTimeout(showToast.timeout);
     showToast.timeout = setTimeout(() => {
         toast.classList.remove("opacity-100", "translate-y-0");
@@ -136,7 +133,6 @@ function formatDate(value) {
     }
     
     const parsed = date instanceof Date ? date : new Date(date);
-    
     if (Number.isNaN(parsed.getTime())) return "";
     
     return new Intl.DateTimeFormat('ar-EG', { 
@@ -147,8 +143,92 @@ function formatDate(value) {
 
 
 // ==========================================
-// 1. الإعدادات (Odoo ومديري الشيفت)
+// تحديث تاب الإحصائيات (8 كروت احترافية)
 // ==========================================
+function updateStatistics() {
+    // 1. إجمالي المناديب
+    if(getElement("stat-total-reps")) {
+        getElement("stat-total-reps").textContent = allUsers.length;
+    }
+
+    // 2. إجمالي الفروع بالدليل
+    if(getElement("stat-total-branches")) {
+        getElement("stat-total-branches").textContent = allDirectoryBranches.length;
+    }
+
+    // 3. عدد موظفي الفروع
+    let totalStaff = 0;
+    allDirectoryBranches.forEach(branch => {
+        if (branch.staff && branch.staff.length > 0) {
+            totalStaff += branch.staff.length;
+        }
+    });
+    if(getElement("stat-branch-staff")) {
+        getElement("stat-branch-staff").textContent = totalStaff;
+    }
+
+    // حسابات الأوردرات لليوم الحالي
+    const todayStr = new Date().toDateString();
+    let readyCount = 0;
+    let doneTodayCount = 0;
+    let assignedTodayCount = 0;
+    let openAssignedCount = 0;
+    let uniqueVisits = new Set(); // لحساب عدد الزيارات
+
+    allOrders.forEach(order => {
+        const orderDateStr = order.createdAt?.toDate ? order.createdAt.toDate().toDateString() : "";
+        const isToday = orderDateStr === todayStr;
+        const hasRep = order.hrid && order.hrid !== "";
+
+        // أوردرات جاهزة (بغض النظر عن اليوم)
+        if (order.status === "Ready") {
+            readyCount++;
+        }
+        
+        // تم التسليم اليوم والزيارات
+        if (order.status === "Done" && isToday) {
+            doneTodayCount++;
+            if (order.branch) {
+                // نضيف الفرع في الـ Set عشان نمنع تكرار نفس الفرع في نفس اليوم
+                uniqueVisits.add(order.branch + "_" + order.hrid);
+            }
+        }
+
+        // الأوردرات المسنودة اليوم
+        if (hasRep && isToday && order.status !== "Pending" && order.status !== "Resolved") {
+            assignedTodayCount++;
+            // مسنودة ولم تغلق (ليست Done)
+            if (order.status !== "Done" && order.status !== "Rejected") {
+                openAssignedCount++;
+            }
+        }
+    });
+
+    if(getElement("stat-ready-orders")) getElement("stat-ready-orders").textContent = readyCount;
+    if(getElement("stat-done-orders")) getElement("stat-done-orders").textContent = doneTodayCount;
+    if(getElement("stat-today-visits")) getElement("stat-today-visits").textContent = uniqueVisits.size;
+    if(getElement("stat-assigned-orders")) getElement("stat-assigned-orders").textContent = assignedTodayCount;
+    if(getElement("stat-open-orders")) getElement("stat-open-orders").textContent = openAssignedCount;
+}
+
+
+// ==========================================
+// 1. إعدادات النظام (Odoo ومديري الشيفت)
+// ==========================================
+
+// جلب حساب أودو المسجل وعرضه
+onSnapshot(doc(db, "system", "odoo_credentials"), (docSnap) => {
+    const userLabel = getElement("currentOdooUser");
+    if (!userLabel) return;
+    
+    if (docSnap.exists() && docSnap.data().username) {
+        userLabel.textContent = docSnap.data().username;
+        userLabel.classList.replace("text-red-400", "text-green-400");
+    } else {
+        userLabel.textContent = "لا يوجد حساب مسجل حالياً";
+        userLabel.classList.replace("text-green-400", "text-red-400");
+    }
+});
 
 // حفظ بيانات Odoo
 getElement("odooSettingsForm")?.addEventListener("submit", async (e) => {
@@ -171,6 +251,7 @@ getElement("odooSettingsForm")?.addEventListener("submit", async (e) => {
             updatedAt: serverTimestamp() 
         });
         showToast("تم حفظ بيانات أودو بنجاح", "success");
+        e.target.reset(); // تصفير الفورم بعد الحفظ
     } catch(err) {
         console.error(err);
         showToast("تعذر حفظ البيانات");
@@ -179,43 +260,36 @@ getElement("odooSettingsForm")?.addEventListener("submit", async (e) => {
     }
 });
 
-// إضافة مدير شيفت (مع صورة)
+// إضافة مدير شيفت (برابط الصورة URL)
 getElement("shiftManagerForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     
     const name = getElement("smName").value.trim();
     const whatsapp = getElement("smWhatsapp").value.trim();
-    const fileInput = getElement("smImage");
+    const imageUrl = getElement("smImageUrl").value.trim();
     const btn = e.target.querySelector("button");
 
-    if (!name || !whatsapp || !fileInput.files.length) {
-        return showToast("برجاء إكمال جميع البيانات واختيار الصورة");
+    if (!name || !whatsapp || !imageUrl) {
+        return showToast("برجاء إكمال جميع البيانات ورابط الصورة");
     }
 
     setBusy(btn, true, "جاري الإضافة...");
 
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-    
-    reader.onload = async (evt) => {
-        try {
-            await addDoc(shiftManagersRef, { 
-                name: name, 
-                whatsapp: whatsapp, 
-                image: evt.target.result, 
-                createdAt: serverTimestamp() 
-            });
-            e.target.reset();
-            showToast("تم إضافة المدير بنجاح", "success");
-        } catch(err) {
-            console.error(err);
-            showToast("تعذر إضافة المدير");
-        } finally {
-            setBusy(btn, false);
-        }
-    };
-    
-    reader.readAsDataURL(file);
+    try {
+        await addDoc(shiftManagersRef, { 
+            name: name, 
+            whatsapp: whatsapp, 
+            image: imageUrl, 
+            createdAt: serverTimestamp() 
+        });
+        e.target.reset();
+        showToast("تم إضافة المدير بنجاح", "success");
+    } catch(err) {
+        console.error(err);
+        showToast("تعذر إضافة المدير");
+    } finally {
+        setBusy(btn, false);
+    }
 });
 
 // جلب وعرض مديري الشيفت
@@ -226,22 +300,22 @@ onSnapshot(shiftManagersRef, (snapshot) => {
     tbody.innerHTML = "";
     
     if (snapshot.empty) {
-        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">لا يوجد مديرين مسجلين</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-500 font-bold">لا يوجد مديرين مسجلين</td></tr>';
         return;
     }
     
     snapshot.forEach(docSnap => {
         const sm = docSnap.data();
         tbody.innerHTML += `
-            <tr class="hover:bg-gray-700/50">
+            <tr class="hover:bg-gray-700/50 transition">
                 <td class="p-3 text-center">
-                    <img src="${sm.image}" class="w-10 h-10 rounded-full mx-auto object-cover border border-gray-600">
+                    <img src="${escapeHtml(sm.image)}" class="w-12 h-12 rounded-full mx-auto object-cover border-2 border-gray-600 shadow" onerror="this.src='https://via.placeholder.com/50?text=Error'">
                 </td>
-                <td class="p-3 font-bold">${escapeHtml(sm.name)}</td>
-                <td class="p-3 text-gray-300" dir="ltr">${escapeHtml(sm.whatsapp)}</td>
+                <td class="p-3 font-bold text-white">${escapeHtml(sm.name)}</td>
+                <td class="p-3 text-gray-300 font-mono" dir="ltr">${escapeHtml(sm.whatsapp)}</td>
                 <td class="p-3 text-center">
-                    <button onclick="deleteDoc(doc(db, 'shiftManagers', '${docSnap.id}'))" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded transition">
-                        حذف
+                    <button onclick="deleteDoc(doc(db, 'shiftManagers', '${docSnap.id}'))" class="text-xs font-bold bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg transition shadow">
+                        حذف المدير
                     </button>
                 </td>
             </tr>
@@ -306,6 +380,7 @@ getElement("branchForm")?.addEventListener("submit", async (e) => {
 onSnapshot(branchesDirRef, (snapshot) => {
     allDirectoryBranches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderDirectoryBranches();
+    updateStatistics(); // تحديث الإحصائيات بعد الجلب
 });
 
 function renderDirectoryBranches() {
@@ -318,7 +393,7 @@ function renderDirectoryBranches() {
     const filteredBranches = allDirectoryBranches.filter(b => b.name.toLowerCase().includes(search));
     
     if (filteredBranches.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">لا توجد فروع مسجلة</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-gray-500 font-bold">لا توجد فروع مسجلة بالدليل</td></tr>';
         return;
     }
 
@@ -327,9 +402,9 @@ function renderDirectoryBranches() {
         
         if (branch.staff && branch.staff.length > 0) {
             staffHtml = branch.staff.map(s => `
-                <div class="text-xs bg-gray-900 border border-gray-600 p-2 mb-1 rounded flex justify-between items-center gap-2">
-                    <span>${escapeHtml(s.name)} - <span dir="ltr">${escapeHtml(s.phone)}</span></span>
-                    <button onclick="transferStaff('${branch.id}', '${s.id}', '${escapeHtml(s.name)}')" class="text-blue-400 hover:text-blue-300" title="نقل الموظف لفرع آخر">
+                <div class="text-xs bg-gray-900 border border-gray-600 p-2 mb-1.5 rounded-lg flex justify-between items-center gap-2 shadow-inner">
+                    <span class="font-bold text-gray-300">${escapeHtml(s.name)} <br> <span dir="ltr" class="text-blue-300 font-mono">${escapeHtml(s.phone)}</span></span>
+                    <button onclick="transferStaff('${branch.id}', '${s.id}', '${escapeHtml(s.name)}')" class="text-blue-400 hover:text-blue-300 bg-blue-900/30 p-1.5 rounded transition" title="نقل الموظف لفرع آخر">
                         <i class="fas fa-exchange-alt"></i>
                     </button>
                 </div>
@@ -337,14 +412,14 @@ function renderDirectoryBranches() {
         }
 
         tbody.innerHTML += `
-            <tr class="hover:bg-gray-700/50">
-                <td class="p-3 font-bold text-blue-400">${escapeHtml(branch.name)}</td>
-                <td class="p-3 text-sm text-gray-300">${escapeHtml(branch.hours)}</td>
-                <td class="p-3 text-sm text-gray-300">${escapeHtml(branch.manager)}</td>
-                <td class="p-3 w-64">${staffHtml}</td>
-                <td class="p-3 text-center">
-                    <button onclick="deleteDirBranch('${branch.id}')" class="text-xs bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded transition">
-                        حذف
+            <tr class="hover:bg-gray-700/50 transition">
+                <td class="p-4 font-bold text-blue-400">${escapeHtml(branch.name)}</td>
+                <td class="p-4 text-sm text-gray-300">${escapeHtml(branch.hours)}</td>
+                <td class="p-4 text-sm text-gray-300">${escapeHtml(branch.manager)}</td>
+                <td class="p-4 w-64">${staffHtml}</td>
+                <td class="p-4 text-center">
+                    <button onclick="deleteDirBranch('${branch.id}')" class="text-xs font-bold bg-red-900/50 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg transition shadow">
+                        حذف الفرع
                     </button>
                 </td>
             </tr>
@@ -352,19 +427,23 @@ function renderDirectoryBranches() {
     });
 }
 
-// بحث في الفروع
 getElement("searchBranchInput")?.addEventListener("input", renderDirectoryBranches);
 
-// حذف فرع
 window.deleteDirBranch = (id) => {
-    window.UI.openModal("تأكيد الحذف", "<p class='text-red-400 font-bold'>هل أنت متأكد من حذف الفرع من الدليل نهائياً؟</p>", "حذف نهائي", "bg-red-600", async () => {
-        try {
-            await deleteDoc(doc(db, "branchesDirectory", id));
-            showToast("تم الحذف بنجاح", "success");
-        } catch(e) {
-            showToast("تعذر الحذف");
+    window.UI.openModal(
+        "تأكيد الحذف", 
+        "<p class='text-red-400 font-bold'>هل أنت متأكد من حذف الفرع من الدليل نهائياً؟</p>", 
+        "حذف نهائي", 
+        "bg-red-600", 
+        async () => {
+            try {
+                await deleteDoc(doc(db, "branchesDirectory", id));
+                showToast("تم الحذف بنجاح", "success");
+            } catch(e) {
+                showToast("تعذر الحذف");
+            }
         }
-    });
+    );
 };
 
 // نقل موظف من فرع لفرع آخر
@@ -379,45 +458,49 @@ window.transferStaff = (currentBranchId, staffId, staffName) => {
     
     const htmlContent = `
         <p class="mb-3 text-gray-300">نقل الموظف <span class="text-yellow-400 font-bold">${staffName}</span> إلى فرع آخر:</p>
-        <select id="transferBranchSelect" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2 outline-none focus:border-blue-500">
+        <select id="transferBranchSelect" class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white mb-2 outline-none focus:border-blue-500 shadow-inner">
             ${branchOptions}
         </select>
     `;
     
-    window.UI.openModal("نقل موظف", htmlContent, "تأكيد النقل", "bg-blue-600", async () => {
-        const targetBranchId = getElement("transferBranchSelect").value;
-        
-        if (!targetBranchId) {
-            return showToast("يجب اختيار فرع الوجهة أولاً");
-        }
-        
-        const sourceBranch = allDirectoryBranches.find(b => b.id === currentBranchId);
-        const targetBranch = allDirectoryBranches.find(b => b.id === targetBranchId);
-        
-        const staffMemberToMove = sourceBranch.staff.find(s => s.id === staffId);
-        const newSourceStaff = sourceBranch.staff.filter(s => s.id !== staffId);
-        const newTargetStaff = [...(targetBranch.staff || []), staffMemberToMove];
+    window.UI.openModal(
+        "نقل موظف", 
+        htmlContent, 
+        "تأكيد النقل", 
+        "bg-blue-600", 
+        async () => {
+            const targetBranchId = getElement("transferBranchSelect").value;
+            
+            if (!targetBranchId) {
+                return showToast("يجب اختيار فرع الوجهة أولاً");
+            }
+            
+            const sourceBranch = allDirectoryBranches.find(b => b.id === currentBranchId);
+            const targetBranch = allDirectoryBranches.find(b => b.id === targetBranchId);
+            
+            const staffMemberToMove = sourceBranch.staff.find(s => s.id === staffId);
+            const newSourceStaff = sourceBranch.staff.filter(s => s.id !== staffId);
+            const newTargetStaff = [...(targetBranch.staff || []), staffMemberToMove];
 
-        try {
-            await updateDoc(doc(db, "branchesDirectory", currentBranchId), { staff: newSourceStaff });
-            await updateDoc(doc(db, "branchesDirectory", targetBranchId), { staff: newTargetStaff });
-            showToast("تم نقل الموظف بنجاح", "success");
-        } catch(e) {
-            console.error(e);
-            showToast("تعذر نقل الموظف");
+            try {
+                await updateDoc(doc(db, "branchesDirectory", currentBranchId), { staff: newSourceStaff });
+                await updateDoc(doc(db, "branchesDirectory", targetBranchId), { staff: newTargetStaff });
+                showToast("تم نقل الموظف بنجاح", "success");
+            } catch(e) {
+                console.error(e);
+                showToast("تعذر نقل الموظف");
+            }
         }
-    });
+    );
 };
 
 
 // ==========================================
-// 3. إدارة الفرق (Teams) والشاحنات (Cars)
+// 3. إدارة الفرق والشاحنات 
 // ==========================================
 
-// إضافة تيم
 getElement("teamForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
     const name = getElement("newTeamName").value.trim();
     if (!name) return;
     
@@ -435,17 +518,15 @@ getElement("teamForm")?.addEventListener("submit", async (e) => {
     }
 });
 
-// جلب الفرق
 onSnapshot(teamsRef, (snapshot) => {
     const tbody = getElement("teamsTableBody");
     const selectsToUpdate = [getElement("newEmpTeam"), getElement("targetTeamValue")];
     
     if (tbody) tbody.innerHTML = "";
-    
     let optionsHtml = '<option value="">اختر التيم...</option>';
 
     if (snapshot.empty && tbody) {
-        tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500">لا توجد فرق مسجلة</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-gray-500 font-bold">لا توجد فرق مسجلة</td></tr>';
     }
     
     snapshot.forEach(docSnap => {
@@ -454,11 +535,13 @@ onSnapshot(teamsRef, (snapshot) => {
         
         if (tbody) {
             tbody.innerHTML += `
-                <tr class="hover:bg-gray-700/50">
-                    <td class="p-4 font-bold">${teamName}</td>
+                <tr class="hover:bg-gray-700/50 transition">
+                    <td class="p-4 font-bold text-white">${teamName}</td>
                     <td class="p-4 text-gray-400 text-sm">${formatDate(docSnap.data().createdAt)}</td>
                     <td class="p-4 text-center">
-                        <button onclick="deleteDoc(doc(db, 'teams', '${docSnap.id}'))" class="text-xs bg-red-900/50 text-red-400 px-3 py-1.5 rounded hover:bg-red-600 hover:text-white transition">حذف</button>
+                        <button onclick="deleteDoc(doc(db, 'teams', '${docSnap.id}'))" class="text-xs font-bold bg-red-900/50 text-red-400 px-4 py-2 rounded-lg hover:bg-red-600 hover:text-white transition shadow">
+                            حذف التيم
+                        </button>
                     </td>
                 </tr>
             `;
@@ -470,10 +553,9 @@ onSnapshot(teamsRef, (snapshot) => {
     });
 });
 
-// إضافة شاحنة
+// الشاحنات (إضافة، تعديل، وترتيب أبجدي)
 getElement("truckForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
     const name = getElement("newTruckName").value.trim();
     if (!name) return;
     
@@ -491,32 +573,44 @@ getElement("truckForm")?.addEventListener("submit", async (e) => {
     }
 });
 
-// جلب الشاحنات
 onSnapshot(trucksRef, (snapshot) => {
     const tbody = getElement("trucksTableBody");
     const selectsToUpdate = [getElement("targetCarValue")];
     
-    trucksList = [];
-    if (tbody) tbody.innerHTML = "";
-    
-    let optionsHtml = '<option value="">اختر العربية...</option>';
-
-    if (snapshot.empty && tbody) {
-        tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500">لا توجد شاحنات مسجلة</td></tr>';
-    }
+    let trucksArray = [];
     
     snapshot.forEach(docSnap => {
-        const carName = escapeHtml(docSnap.data().name);
-        trucksList.push(carName);
+        trucksArray.push({ id: docSnap.id, ...docSnap.data() });
+    });
+
+    // ترتيب الشاحنات أبجدياً بناءً على طلبك
+    trucksArray.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+    trucksList = trucksArray.map(t => t.name);
+    
+    if (tbody) tbody.innerHTML = "";
+    let optionsHtml = '<option value="">اختر العربية...</option>';
+
+    if (trucksArray.length === 0 && tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-gray-500 font-bold">لا توجد شاحنات مسجلة</td></tr>';
+    }
+    
+    trucksArray.forEach(truck => {
+        const carName = escapeHtml(truck.name);
         optionsHtml += `<option value="${carName}">${carName}</option>`;
         
         if (tbody) {
             tbody.innerHTML += `
-                <tr class="hover:bg-gray-700/50">
-                    <td class="p-4 font-bold">${carName}</td>
-                    <td class="p-4 text-gray-400 text-sm">${formatDate(docSnap.data().createdAt)}</td>
+                <tr class="hover:bg-gray-700/50 transition">
+                    <td class="p-4 font-bold text-white">${carName}</td>
+                    <td class="p-4 text-gray-400 text-sm">${formatDate(truck.createdAt)}</td>
                     <td class="p-4 text-center">
-                        <button onclick="deleteDoc(doc(db, 'trucks', '${docSnap.id}'))" class="text-xs bg-red-900/50 text-red-400 px-3 py-1.5 rounded hover:bg-red-600 hover:text-white transition">حذف</button>
+                        <button onclick="editTruck('${truck.id}', '${carName}')" class="text-xs font-bold bg-blue-900/50 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-600 hover:text-white transition shadow ml-2">
+                            تعديل
+                        </button>
+                        <button onclick="deleteDoc(doc(db, 'trucks', '${truck.id}'))" class="text-xs font-bold bg-red-900/50 text-red-400 px-4 py-2 rounded-lg hover:bg-red-600 hover:text-white transition shadow">
+                            حذف
+                        </button>
                     </td>
                 </tr>
             `;
@@ -528,12 +622,37 @@ onSnapshot(trucksRef, (snapshot) => {
     });
 });
 
+window.editTruck = (id, oldName) => {
+    const htmlContent = `
+        <label class="block text-sm font-bold text-gray-400 mb-2">اسم العربية أو رقمها الجديد:</label>
+        <input type="text" id="editTruckNameInp" value="${oldName}" class="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
+    `;
+    
+    window.UI.openModal(
+        "تعديل بيانات الشاحنة", 
+        htmlContent, 
+        "حفظ التعديل", 
+        "bg-blue-600", 
+        async () => {
+            const newName = getElement("editTruckNameInp").value.trim();
+            if (!newName) return showToast("يجب إدخال اسم للشاحنة");
+            
+            try {
+                await updateDoc(doc(db, "trucks", id), { name: newName });
+                showToast("تم تعديل الشاحنة بنجاح", "success");
+            } catch(e) {
+                console.error(e);
+                showToast("تعذر حفظ التعديل");
+            }
+        }
+    );
+};
+
 
 // ==========================================
-// 4. إدارة المناديب (Employees)
+// 4. إدارة المناديب
 // ==========================================
 
-// جلب المناديب وعرضهم
 onSnapshot(usersRef, (snapshot) => {
     const tbody = getElement("employeesTableBody");
     const repsDataList = getElement("repsDataList");
@@ -541,14 +660,12 @@ onSnapshot(usersRef, (snapshot) => {
     if (tbody) tbody.innerHTML = "";
     if (repsDataList) repsDataList.innerHTML = "";
     
-    let totalReps = 0;
     allUsers = [];
 
     snapshot.forEach((docSnap) => {
         const user = docSnap.data();
         const hrid = docSnap.id;
         
-        totalReps++;
         allUsers.push({ id: hrid, name: user.name, car: user.car });
         
         if (repsDataList) {
@@ -561,17 +678,16 @@ onSnapshot(usersRef, (snapshot) => {
         
         tbody.innerHTML += `
             <tr class="hover:bg-gray-700/50 transition">
-                <td class="p-4 font-bold">${escapeHtml(user.name)}</td>
+                <td class="p-4 font-bold text-white">${escapeHtml(user.name)}</td>
                 <td class="p-4 text-blue-400 font-bold">${escapeHtml(hrid)}</td>
-                <td class="p-4" dir="ltr">${escapeHtml(user.mobile)}</td>
+                <td class="p-4 text-gray-300 font-mono" dir="ltr">${escapeHtml(user.mobile)}</td>
                 <td class="p-4 text-gray-300">${escapeHtml(user.team)}</td>
-                <td class="p-4 text-yellow-400 font-bold">${escapeHtml(user.car || 'غير محدد')}</td>
-                <td class="p-4 text-center tracking-widest font-mono text-gray-300">${user.pinCode || '----'}</td>
+                <td class="p-4 text-center tracking-widest font-mono text-gray-400 font-bold">${user.pinCode || '----'}</td>
                 <td class="p-4 text-center">
-                    <button onclick="updateDoc(doc(db, 'users', '${hrid}'), { pinCode: null })" class="text-xs bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white px-2 py-1 rounded transition mr-1" title="تصفير الرقم السري">
+                    <button onclick="updateDoc(doc(db, 'users', '${hrid}'), { pinCode: null })" class="text-xs bg-red-900/50 hover:bg-red-600 text-red-400 hover:text-white px-3 py-2 rounded-lg transition mr-1 shadow" title="تصفير الرقم السري">
                         <i class="fas fa-key"></i>
                     </button>
-                    <button onclick="updateDoc(doc(db, 'users', '${hrid}'), { status: '${isSuspended ? 'active' : 'suspended'}' })" class="text-xs ${isSuspended ? 'bg-green-900/50 hover:bg-green-600 text-green-400' : 'bg-orange-900/50 hover:bg-orange-600 text-orange-400'} hover:text-white px-2 py-1 rounded transition mr-1" title="${isSuspended ? 'تفعيل' : 'تعطيل'}">
+                    <button onclick="updateDoc(doc(db, 'users', '${hrid}'), { status: '${isSuspended ? 'active' : 'suspended'}' })" class="text-xs ${isSuspended ? 'bg-green-900/50 hover:bg-green-600 text-green-400' : 'bg-orange-900/50 hover:bg-orange-600 text-orange-400'} hover:text-white px-3 py-2 rounded-lg transition shadow" title="${isSuspended ? 'تفعيل' : 'تعطيل حساب المندوب'}">
                         <i class="fas ${isSuspended ? 'fa-user-check' : 'fa-user-slash'}"></i>
                     </button>
                 </td>
@@ -579,12 +695,9 @@ onSnapshot(usersRef, (snapshot) => {
         `;
     });
     
-    if (getElement("stat-total-reps")) {
-        getElement("stat-total-reps").textContent = totalReps;
-    }
+    updateStatistics(); // تحديث الإحصائيات
 });
 
-// إضافة مندوب جديد
 getElement("employeeForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     
@@ -633,7 +746,6 @@ getElement("employeeForm")?.addEventListener("submit", async (e) => {
 // 5. إدارة الأوردرات (رفع الشيت وتوزيعه)
 // ==========================================
 
-// جلب التعيينات المحفوظة للفروع
 onSnapshot(branchMappingsRef, (snapshot) => {
     branchMappingsMap.clear();
     snapshot.forEach(docSnap => {
@@ -641,7 +753,6 @@ onSnapshot(branchMappingsRef, (snapshot) => {
     });
 });
 
-// قراءة ملف الإكسيل
 getElement("excelFileInput")?.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -664,13 +775,12 @@ getElement("excelFileInput")?.addEventListener("change", (e) => {
             console.error(error);
             showToast("حدث خطأ أثناء قراءة ملف الإكسيل");
         }
-        e.target.value = ""; // تصفير الحقل
+        e.target.value = ""; 
     };
     
     reader.readAsArrayBuffer(file);
 });
 
-// تجهيز واجهة تعيين الفروع (Wizard)
 function setupMappingWizard(data) {
     getElement("uploadPromptContainer").classList.add("hidden");
     getElement("groupedOrdersContainer").classList.add("hidden");
@@ -679,23 +789,17 @@ function setupMappingWizard(data) {
     let uniqueBranches = new Set();
     let uniqueCategories = new Set();
 
-    // فلترة واستخراج الفروع والأقسام
     data.forEach(row => {
         const productNameRaw = row['Stock Moves/Product/Name'];
         const barcodeRaw = row['Stock Moves/Product/Breadfast Barcode'];
         
-        // تجاهل تام للصفوف الفارغة أو العناوين
         if (!productNameRaw || !barcodeRaw) return;
 
         const branchRaw = row['Stock Moves/Destination Location'];
         const categoryRaw = row['Stock Moves/Internal Type'];
         
-        if (branchRaw !== undefined) {
-            uniqueBranches.add(cleanBranchName(branchRaw));
-        }
-        if (categoryRaw !== undefined) {
-            uniqueCategories.add(String(categoryRaw).trim());
-        }
+        if (branchRaw !== undefined) uniqueBranches.add(cleanBranchName(branchRaw));
+        if (categoryRaw !== undefined) uniqueCategories.add(String(categoryRaw).trim());
     });
 
     const newBranchesBody = getElement("newBranchesTableBody");
@@ -721,28 +825,28 @@ function setupMappingWizard(data) {
             savedCount++;
             const mapping = branchMappingsMap.get(branchId);
             const statusHtml = mapping.ignored 
-                ? `<span class="text-red-400">متجاهل</span>` 
-                : `<span class="text-green-400">${escapeHtml(mapping.car)}</span>`;
+                ? `<span class="text-red-400 font-bold">متجاهل</span>` 
+                : `<span class="text-green-400 font-bold">${escapeHtml(mapping.car)}</span>`;
             
             savedBranchesBody.innerHTML += `
-                <tr class="hover:bg-gray-700/50">
-                    <td class="p-3 font-bold text-gray-300">${escapeHtml(branch)}</td>
-                    <td class="p-3">${statusHtml}</td>
-                    <td class="p-3 text-gray-400">مسجل بالسيستم</td>
+                <tr class="hover:bg-gray-700/50 transition">
+                    <td class="p-4 font-bold text-gray-300">${escapeHtml(branch)}</td>
+                    <td class="p-4">${statusHtml}</td>
+                    <td class="p-4 text-gray-400">تم حفظ الإعدادات مسبقاً</td>
                 </tr>
             `;
         } else {
             newCount++;
             newBranchesBody.innerHTML += `
-                <tr class="hover:bg-gray-700/50 new-branch-row" data-branch="${escapeHtml(branch)}" data-branch-id="${escapeHtml(branchId)}">
-                    <td class="p-3 font-bold text-yellow-400">${escapeHtml(branch)}</td>
-                    <td class="p-3">
-                        <select class="branch-car-select w-full px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-white outline-none focus:border-blue-500">
+                <tr class="hover:bg-gray-700/50 new-branch-row transition" data-branch="${escapeHtml(branch)}" data-branch-id="${escapeHtml(branchId)}">
+                    <td class="p-4 font-bold text-yellow-400">${escapeHtml(branch)}</td>
+                    <td class="p-4">
+                        <select class="branch-car-select w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">
                             ${carOptions}
                         </select>
                     </td>
-                    <td class="p-3">
-                        <input type="text" class="branch-ignore-input w-full px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-white outline-none focus:border-red-500" placeholder="سبب التجاهل لو وجد...">
+                    <td class="p-4">
+                        <input type="text" class="branch-ignore-input w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-red-500 shadow-inner" placeholder="اكتب سبب التجاهل إن وجد...">
                     </td>
                 </tr>
             `;
@@ -750,7 +854,7 @@ function setupMappingWizard(data) {
     });
 
     if (newCount === 0) {
-        newBranchesBody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-green-400 font-bold"><i class="fas fa-check-circle"></i> جميع فروع الشيت معرفة مسبقاً</td></tr>';
+        newBranchesBody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-green-400 font-bold"><i class="fas fa-check-circle text-2xl mb-2 block"></i> جميع فروع الشيت معرفة مسبقاً وجاهزة</td></tr>';
     }
     
     getElement("newBranchesCount").textContent = newCount;
@@ -758,21 +862,19 @@ function setupMappingWizard(data) {
 
     uniqueCategories.forEach(cat => {
         categoriesContainer.innerHTML += `
-            <label class="flex items-center gap-2 bg-gray-900 px-3 py-2 rounded border border-gray-600 cursor-pointer hover:border-yellow-500 transition">
-                <input type="checkbox" value="${escapeHtml(cat)}" class="category-exclude-checkbox w-4 h-4 text-yellow-500 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500">
-                <span class="text-sm text-gray-300">${escapeHtml(cat)}</span>
+            <label class="flex items-center gap-3 bg-gray-900 px-4 py-3 rounded-lg border border-gray-600 cursor-pointer hover:border-yellow-500 transition shadow-inner">
+                <input type="checkbox" value="${escapeHtml(cat)}" class="category-exclude-checkbox w-5 h-5 text-yellow-500 bg-gray-800 border-gray-600 rounded focus:ring-yellow-500">
+                <span class="text-sm font-bold text-gray-300">${escapeHtml(cat)}</span>
             </label>
         `;
     });
 }
 
-// معالجة الشيت وعرض الأوردرات مجمعة
 getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     const btn = e.target;
     let hasErrors = false;
     let newMappingsToSave = [];
 
-    // التحقق من تعيين الفروع الجديدة
     document.querySelectorAll('.new-branch-row').forEach(row => {
         const car = row.querySelector('.branch-car-select').value;
         const ignoreReason = row.querySelector('.branch-ignore-input').value.trim();
@@ -804,7 +906,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     setBusy(btn, true, "جاري المعالجة والتقسيم...");
 
     try {
-        // حفظ تعيينات الفروع الجديدة في الداتا بيز
         for (const mapping of newMappingsToSave) {
             await setDoc(doc(db, "branchMappings", mapping.id), mapping.data);
             branchMappingsMap.set(mapping.id, mapping.data);
@@ -813,7 +914,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
         processedOrdersToUpload = [];
         let groupedDataByCar = {}; 
 
-        // تجهيز بيانات الأوردرات
         currentSheetData.forEach(row => {
             const productNameRaw = row['Stock Moves/Product/Name'];
             const barcodeRaw = row['Stock Moves/Product/Breadfast Barcode'];
@@ -844,7 +944,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
                 car: carName
             };
 
-            // الهيكل التجميعي: عربية -> فروع -> أقسام -> منتجات
             if (!groupedDataByCar[carName]) groupedDataByCar[carName] = { branches: {} };
             if (!groupedDataByCar[carName].branches[branch]) groupedDataByCar[carName].branches[branch] = { categories: {} };
             if (!groupedDataByCar[carName].branches[branch].categories[category]) groupedDataByCar[carName].branches[branch].categories[category] = [];
@@ -854,7 +953,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
             processedOrdersToUpload.push(productObj);
         });
 
-        // تصفير الإسنادات استعداداً للمعاينة
         carAssignments = {}; 
         assignedReps = {};
         
@@ -871,7 +969,6 @@ getElement("processSheetBtn")?.addEventListener("click", async (e) => {
     }
 });
 
-// دالة رسم الأكورديون (تُستخدم للمعاينة وللعرض من الداتا بيز)
 function renderCarsAccordion(groupedDataByCar, containerId, isAssignMode) {
     const container = getElement(containerId);
     if (!container) return;
@@ -892,30 +989,30 @@ function renderCarsAccordion(groupedDataByCar, containerId, isAssignMode) {
             
             for (const [category, products] of Object.entries(branchData.categories)) {
                 let productsRows = products.map(p => `
-                    <tr class="hover:bg-gray-800/50">
-                        <td class="p-2">${escapeHtml(p.productName)}</td>
-                        <td class="p-2 font-mono text-gray-300" dir="ltr">${escapeHtml(p.barcode)}</td>
-                        <td class="p-2 text-center text-blue-300 font-bold">${escapeHtml(p.quantity)}</td>
+                    <tr class="hover:bg-gray-800/50 transition">
+                        <td class="p-3 font-bold text-gray-200">${escapeHtml(p.productName)}</td>
+                        <td class="p-3 font-mono text-gray-400" dir="ltr">${escapeHtml(p.barcode)}</td>
+                        <td class="p-3 text-center text-blue-300 font-bold">${escapeHtml(p.quantity)}</td>
                     </tr>
                 `).join("");
                 
                 categoriesHtml += `
-                    <div class="mt-3 border border-gray-600 rounded-lg overflow-hidden bg-gray-800 shadow">
+                    <div class="mt-4 border border-gray-600 rounded-lg overflow-hidden bg-gray-800 shadow">
                         <div class="bg-gray-700 p-3 flex justify-between items-center cursor-pointer hover:bg-gray-600 transition" onclick="toggleAccordion(this)">
-                            <span class="font-bold text-yellow-400 text-sm">
-                                <i class="fas fa-tag mr-2"></i> ${escapeHtml(category)} 
-                                <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-0.5 rounded ml-2">${products.length} صنف</span>
+                            <span class="font-bold text-yellow-400 text-sm flex items-center gap-2">
+                                <i class="fas fa-tag"></i> ${escapeHtml(category)} 
+                                <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-0.5 rounded-full shadow">${products.length} صنف</span>
                             </span>
                             <i class="fas fa-chevron-down chevron text-gray-400 text-sm"></i>
                         </div>
                         <div class="accordion-content p-0 border-0">
                             <div class="overflow-x-auto">
                                 <table class="w-full text-xs text-right">
-                                    <thead class="bg-gray-900 text-gray-400">
+                                    <thead class="bg-gray-900 text-gray-400 border-b border-gray-700">
                                         <tr>
-                                            <th class="p-2">الصنف</th>
-                                            <th class="p-2">الباركود</th>
-                                            <th class="p-2 text-center">الكمية</th>
+                                            <th class="p-3 font-bold">المنتج</th>
+                                            <th class="p-3 font-bold">الباركود</th>
+                                            <th class="p-3 font-bold text-center">الكمية</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-700">
@@ -929,8 +1026,10 @@ function renderCarsAccordion(groupedDataByCar, containerId, isAssignMode) {
             }
             
             branchesHtml += `
-                <div class="mt-4 pl-4 border-r-2 border-green-500">
-                    <h5 class="text-md font-bold text-green-400"><i class="fas fa-map-marker-alt ml-1"></i> ${escapeHtml(branchName)}</h5>
+                <div class="mt-6 pl-4 border-r-4 border-green-500 bg-gray-900/30 p-4 rounded-l-xl">
+                    <h5 class="text-lg font-bold text-green-400 flex items-center gap-2">
+                        <i class="fas fa-map-marker-alt"></i> ${escapeHtml(branchName)}
+                    </h5>
                     ${categoriesHtml}
                 </div>
             `;
@@ -939,34 +1038,42 @@ function renderCarsAccordion(groupedDataByCar, containerId, isAssignMode) {
         let assignUiHtml = "";
         if (isAssignMode) {
             assignUiHtml = `
-                <div id="assign_ui_${safeCarId}" class="flex flex-col md:flex-row gap-2 w-full md:w-auto bg-gray-900 p-2 rounded-lg border border-gray-600">
-                    <select id="assign_select_${safeCarId}" class="px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-white text-sm outline-none focus:border-blue-500">
+                <div id="assign_ui_${safeCarId}" class="flex flex-col md:flex-row gap-3 w-full md:w-auto bg-gray-900 p-3 rounded-xl border border-gray-600 shadow-inner">
+                    <select id="assign_select_${safeCarId}" class="px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm outline-none focus:border-blue-500 w-full md:w-64">
                         ${repsOptions}
                     </select>
-                    <button onclick="assignCarToRep('${escapeHtml(carName)}', '${safeCarId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded font-bold text-sm shadow transition">
-                        إسناد للمندوب
+                    <button onclick="assignCarToRep('${escapeHtml(carName)}', '${safeCarId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-lg transition w-full md:w-auto border border-blue-500">
+                        <i class="fas fa-user-plus mr-1"></i> إسناد للمندوب
                     </button>
                 </div>
-                <div id="assigned_ui_${safeCarId}" class="hidden flex flex-col md:flex-row items-center gap-3 w-full md:w-auto bg-green-900/30 p-2 rounded-lg border border-green-700">
-                    <span class="text-green-400 font-bold text-sm"><i class="fas fa-check-circle ml-1"></i> مُسند لـ: <span id="assigned_name_${safeCarId}"></span></span>
-                    <button onclick="cancelCarAssignment('${escapeHtml(carName)}', '${safeCarId}')" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded shadow transition">
-                        إلغاء الإسناد
+                
+                <div id="assigned_ui_${safeCarId}" class="hidden flex flex-col md:flex-row items-center justify-between gap-4 w-full md:w-auto bg-green-900/40 p-3 rounded-xl border border-green-600 shadow-inner">
+                    <span class="text-green-400 font-bold text-sm flex items-center gap-2">
+                        <i class="fas fa-check-circle text-lg"></i> تم الإسناد لـ: 
+                        <span id="assigned_name_${safeCarId}" class="text-white bg-green-800 px-3 py-1 rounded-lg"></span>
+                    </span>
+                    <button onclick="cancelCarAssignment('${escapeHtml(carName)}', '${safeCarId}')" class="text-xs font-bold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg transition border border-red-500 w-full md:w-auto">
+                        <i class="fas fa-times mr-1"></i> إلغاء الإسناد
                     </button>
                 </div>
             `;
         }
 
         container.innerHTML += `
-            <div class="bg-gray-800 border ${isAssignMode ? 'border-blue-800' : 'border-gray-600'} rounded-xl shadow-lg overflow-hidden mb-6">
-                <div class="bg-gray-700 p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="bg-gray-800 border-2 ${isAssignMode ? 'border-blue-800/50' : 'border-gray-700'} rounded-2xl shadow-2xl overflow-hidden mb-8">
+                <div class="bg-gray-700 p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 border-b border-gray-600">
                     <div class="flex items-center cursor-pointer flex-1" onclick="toggleAccordion(this.parentElement)">
-                        <i class="fas fa-chevron-down chevron transition-transform text-xl text-blue-400 ml-3"></i>
-                        <h4 class="text-xl font-bold text-white"><i class="fas fa-truck text-blue-400 ml-2"></i> ${escapeHtml(carName)}</h4>
+                        <div class="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center border border-gray-600 shadow-inner">
+                            <i class="fas fa-chevron-down chevron transition-transform text-lg text-blue-400"></i>
+                        </div>
+                        <h4 class="text-2xl font-bold text-white ml-4 flex items-center gap-3">
+                            <i class="fas fa-truck text-blue-400 text-3xl"></i> ${escapeHtml(carName)}
+                        </h4>
                     </div>
                     ${assignUiHtml}
                 </div>
                 <div class="accordion-content p-0 border-0">
-                    <div class="p-4 bg-gray-800/50">
+                    <div class="p-6 bg-gray-800/50">
                         ${branchesHtml}
                     </div>
                 </div>
@@ -975,7 +1082,6 @@ function renderCarsAccordion(groupedDataByCar, containerId, isAssignMode) {
     }
 }
 
-// دوال إسناد العربيات للمناديب
 window.assignCarToRep = (carName, safeCarId) => {
     const selectEl = getElement(`assign_select_${safeCarId}`);
     const selectedHrid = selectEl.value;
@@ -989,9 +1095,20 @@ window.assignCarToRep = (carName, safeCarId) => {
     if (rep.car && rep.car !== carName) hasOtherCars = true;
 
     if (hasOtherCars) {
-        window.UI.openModal("تنبيه إسناد متعدد", `<p class="text-gray-300">المندوب <span class="text-yellow-400 font-bold">${rep.name}</span> لديه بالفعل سيارة مُسندة.</p><p>هل أنت متأكد من رغبتك في إسناد هذه السيارة إليه أيضاً؟</p>`, "نعم، قم بالإسناد", "bg-orange-600", () => {
-            finalizeAssignment(carName, safeCarId, rep);
-        });
+        window.UI.openModal(
+            "تنبيه إسناد متعدد", 
+            `
+            <div class="bg-orange-900/20 p-4 rounded-lg border border-orange-900/50">
+                <p class="text-gray-300 mb-2">المندوب <span class="text-yellow-400 font-bold text-lg">${rep.name}</span> لديه بالفعل سيارة مُسندة.</p>
+                <p class="text-sm text-gray-400">هل أنت متأكد من رغبتك في إضافة هذه السيارة لعهدته أيضاً؟</p>
+            </div>
+            `, 
+            "نعم، قم بالإسناد", 
+            "bg-orange-600 border-orange-500", 
+            () => {
+                finalizeAssignment(carName, safeCarId, rep);
+            }
+        );
     } else {
         finalizeAssignment(carName, safeCarId, rep);
     }
@@ -1027,73 +1144,82 @@ window.cancelCarAssignment = (carName, safeCarId) => {
     getElement(`assign_select_${safeCarId}`).value = "";
 };
 
-// حفظ الأوردرات في قاعدة البيانات
+// حفظ الأوردرات في الداتا بيز
 getElement("confirmAndUploadOrdersBtn")?.addEventListener("click", async (e) => {
     if (processedOrdersToUpload.length === 0) return;
     
     const btn = e.target;
     
-    window.UI.openModal("تأكيد الاعتماد", "<p class='text-gray-300'>هل أنت متأكد من حفظ وتوزيع هذه الأوردرات وتأكيد الإسنادات؟</p><p class='text-sm text-gray-400 mt-2'>بمجرد الحفظ سيتم إرسال الأوردرات لتطبيقات المناديب فوراً.</p>", "نعم، احفظ الأوردرات", "bg-green-600", async () => {
-        setBusy(btn, true, "جاري رفع الأوردرات للسيستم...");
-        
-        try {
-            let batch = writeBatch(db);
-            let count = 0;
+    window.UI.openModal(
+        "تأكيد الاعتماد", 
+        `
+        <div class="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+            <p class='text-white font-bold mb-2'><i class="fas fa-question-circle text-blue-400"></i> هل أنت متأكد من حفظ وتوزيع هذه الأوردرات؟</p>
+            <p class='text-sm text-gray-400'>بمجرد الحفظ سيتم ربط الأوردرات بالمناديب وإرسالها لتطبيقاتهم فوراً لبدء العمل.</p>
+        </div>
+        `, 
+        "نعم، اعتمد وحفظ الأوردرات", 
+        "bg-green-600 border-green-500", 
+        async () => {
+            setBusy(btn, true, "جاري رفع الأوردرات للسيستم...");
             
-            for (const order of processedOrdersToUpload) {
-                // إسناد الـ HRID بناءً على العربية
-                order.hrid = carAssignments[order.car] || "";
-                order.status = "Draft"; 
-                order.createdAt = serverTimestamp();
-                order.updatedAt = serverTimestamp();
+            try {
+                let batch = writeBatch(db);
+                let count = 0;
                 
-                batch.set(doc(ordersRef), order);
-                count++;
+                for (const order of processedOrdersToUpload) {
+                    order.hrid = carAssignments[order.car] || "";
+                    order.status = "Draft"; 
+                    order.createdAt = serverTimestamp();
+                    order.updatedAt = serverTimestamp();
+                    
+                    batch.set(doc(ordersRef), order);
+                    count++;
+                    
+                    if (count === 400) { 
+                        await batch.commit(); 
+                        batch = writeBatch(db); 
+                        count = 0; 
+                    }
+                }
+                if (count > 0) await batch.commit();
+
+                // تحديث سيارات المناديب
+                let userBatch = writeBatch(db);
+                let updatedUsersCount = 0;
                 
-                if (count === 400) { 
-                    await batch.commit(); 
-                    batch = writeBatch(db); 
-                    count = 0; 
+                for (const [carName, hrid] of Object.entries(carAssignments)) {
+                    if (hrid) { 
+                        userBatch.update(doc(db, "users", hrid), { 
+                            car: carName, 
+                            updatedAt: serverTimestamp() 
+                        }); 
+                        updatedUsersCount++; 
+                    }
                 }
-            }
-            if (count > 0) await batch.commit();
+                if (updatedUsersCount > 0) await userBatch.commit();
 
-            // تحديث سيارات المناديب في الداتا بيز
-            let userBatch = writeBatch(db);
-            let updatedUsersCount = 0;
-            
-            for (const [carName, hrid] of Object.entries(carAssignments)) {
-                if (hrid) { 
-                    userBatch.update(doc(db, "users", hrid), { 
-                        car: carName, 
-                        updatedAt: serverTimestamp() 
-                    }); 
-                    updatedUsersCount++; 
-                }
+                showToast("تم الاعتماد ورفع الأوردرات بنجاح!", "success");
+                
+                getElement("groupedOrdersContainer").classList.add("hidden");
+                getElement("uploadPromptContainer").classList.remove("hidden");
+                
+                processedOrdersToUpload = []; 
+                currentSheetData = []; 
+                carAssignments = {}; 
+                assignedReps = {};
+                
+            } catch (error) { 
+                console.error(error);
+                showToast("حدث خطأ أثناء رفع الأوردرات"); 
+            } finally { 
+                setBusy(btn, false); 
             }
-            if (updatedUsersCount > 0) await userBatch.commit();
-
-            showToast("تم الاعتماد ورفع الأوردرات بنجاح!", "success");
-            
-            // إعادة التهيئة
-            getElement("groupedOrdersContainer").classList.add("hidden");
-            getElement("uploadPromptContainer").classList.remove("hidden");
-            
-            processedOrdersToUpload = []; 
-            currentSheetData = []; 
-            carAssignments = {}; 
-            assignedReps = {};
-            
-        } catch (error) { 
-            console.error(error);
-            showToast("حدث خطأ أثناء رفع الأوردرات"); 
-        } finally { 
-            setBusy(btn, false); 
         }
-    });
+    );
 });
 
-// سجل الأوردرات الموزعة بناءً على التاريخ
+// سجل الأوردرات الموزعة
 const dateFilterInput = getElement("dbOrdersDateFilter");
 if (dateFilterInput) {
     dateFilterInput.valueAsDate = new Date();
@@ -1110,16 +1236,20 @@ function renderDbOrdersByDate() {
     const targetDate = new Date(selectedDateStr).toDateString();
     getElement("displayFilteredDate").innerText = `(تاريخ: ${new Date(targetDate).toLocaleDateString('ar-EG')})`;
 
-    // فلترة السجل بناءً على التاريخ واستبعاد المعلقات
     const filteredOrders = allOrders.filter(o => {
         if (o.status === "Pending" || o.status === "Resolved") return false;
-        
         const oDate = o.createdAt?.toDate ? o.createdAt.toDate().toDateString() : null;
         return oDate === targetDate;
     });
 
     if (filteredOrders.length === 0) {
-        container.innerHTML = '<div class="text-center text-gray-500 py-8 border border-gray-700 rounded-lg border-dashed">لا توجد أوردرات موزعة في هذا التاريخ.</div>';
+        container.innerHTML = `
+            <div class="text-center text-gray-500 py-12 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
+                <i class="fas fa-calendar-times text-6xl mb-4 opacity-30 text-gray-400"></i>
+                <h3 class="text-xl font-bold text-gray-400">لا توجد أوردرات</h3>
+                <p class="mt-2 text-sm">لم يتم توزيع أي أوردرات في هذا التاريخ المختار.</p>
+            </div>
+        `;
         return;
     }
 
@@ -1150,7 +1280,7 @@ const pendingBranchSelect = getElement("newOrderBranch");
 const pendingProductSelect = getElement("newOrderProduct");
 const pendingBarcodeInp = getElement("newOrderBarcode");
 
-// الخطوة 1: عند كتابة كود المندوب -> جلب الفروع
+// الخطوة 1: عند كتابة كود المندوب -> جلب الفروع الخاصة به فقط
 pendingHridInput?.addEventListener("input", (e) => {
     const hrid = e.target.value.trim();
     
@@ -1169,7 +1299,7 @@ pendingHridInput?.addEventListener("input", (e) => {
     });
 
     if (branches.size === 0) {
-        pendingBranchSelect.innerHTML = '<option value="">لا يوجد فروع موزعة لهذا المندوب</option>';
+        pendingBranchSelect.innerHTML = '<option value="">لا يوجد فروع مسجلة لعمل هذا المندوب</option>';
     } else {
         branches.forEach(b => {
             pendingBranchSelect.innerHTML += `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`;
@@ -1204,12 +1334,12 @@ pendingBranchSelect?.addEventListener("change", (e) => {
     }
 });
 
-// الخطوة 3: عند اختيار المنتج -> كتابة الباركود
+// الخطوة 3: عند اختيار المنتج -> كتابة الباركود أوتوماتيكياً
 pendingProductSelect?.addEventListener("change", (e) => {
     pendingBarcodeInp.value = e.target.value;
 });
 
-// الخطوة 4: حفظ المعلق
+// الخطوة 4: حفظ الأوردر المعلق
 getElement("orderForm")?.addEventListener("submit", (e) => {
     e.preventDefault();
     
@@ -1220,7 +1350,7 @@ getElement("orderForm")?.addEventListener("submit", (e) => {
     const productName = pendingProductSelect.options[pendingProductSelect.selectedIndex]?.text;
 
     if (!barcode || !hrid || !branch || !productName) {
-        return showToast("برجاء إكمال جميع خطوات الاختيار");
+        return showToast("برجاء إكمال جميع خطوات التسلسل واختيار المنتج");
     }
 
     savePendingOrder(barcode, productName, hrid, branch, notes);
@@ -1246,21 +1376,20 @@ async function savePendingOrder(barcode, productName, hrid, branch, notes) {
             updatedAt: serverTimestamp() 
         });
         
-        // تفريغ الحقول
         pendingHridInput.value = ""; 
         pendingBranchSelect.innerHTML = '<option value="">أدخل المندوب أولاً...</option>';
         pendingProductSelect.innerHTML = '<option value="">أدخل الفرع أولاً...</option>';
         pendingBarcodeInp.value = ""; 
         getElement("newOrderNotes").value = "";
         
-        showToast("تم إنشاء الأوردر المعلق بنجاح", "success");
+        showToast("تم تسجيل الأوردر كمعلق بنجاح", "success");
     } catch (e) { 
         console.error(e);
         showToast("تعذر إنشاء الأوردر المعلق"); 
     }
 }
 
-// جلب وتحديث الأوردرات وعرضها
+// جلب وعرض الأوردرات الشاملة (للفلاتر والمعلقات والإحصائيات)
 onSnapshot(ordersRef, (snapshot) => {
     allOrders = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -1274,6 +1403,7 @@ onSnapshot(ordersRef, (snapshot) => {
     
     renderPendingOrders();
     renderDbOrdersByDate(); 
+    updateStatistics(); // تحديث الإحصائيات الحية
 });
 
 function renderPendingOrders() {
@@ -1290,15 +1420,22 @@ function renderPendingOrders() {
         const product = String(order.productName || "").toLowerCase();
         const barcode = String(order.barcode || "").toLowerCase();
         const rep = String(order.hrid || "").toLowerCase();
+        const branchSearch = String(order.branch || "").toLowerCase();
         
-        const matchSearch = !search || `${product} ${barcode} ${rep}`.includes(search);
+        const matchSearch = !search || (`${product} ${barcode} ${rep} ${branchSearch}`.includes(search));
         return matchSearch && (filter === "all" || status === filter);
     });
 
     container.innerHTML = "";
     
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="text-center text-gray-500 py-8 border border-gray-700 rounded-lg border-dashed">لا توجد أوردرات معلقة أو مرتجعة.</div>';
+        container.innerHTML = `
+            <div class="text-center text-gray-500 py-12 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
+                <i class="fas fa-check-double text-6xl mb-4 opacity-30 text-green-400"></i>
+                <h3 class="text-xl font-bold text-gray-400">لا توجد أوردرات معلقة</h3>
+                <p class="mt-2 text-sm">جميع الأوردرات تم تسويتها أو لا توجد مرتجعات مسجلة.</p>
+            </div>
+        `;
         return;
     }
 
@@ -1312,51 +1449,58 @@ function renderPendingOrders() {
         const statusBg = isResolved ? 'bg-green-900/50 text-green-400' : 'bg-orange-900/50 text-orange-400';
 
         const div = document.createElement("div");
-        div.className = `bg-gray-800 p-4 rounded-lg border ${cardBorder} flex flex-col md:flex-row justify-between items-start gap-4 hover:bg-gray-700/50 transition shadow-lg`;
+        div.className = `bg-gray-800 p-5 rounded-xl border ${cardBorder} flex flex-col md:flex-row justify-between items-start gap-6 hover:bg-gray-700/80 transition shadow-lg`;
         
         div.innerHTML = `
             <div class="min-w-0 flex-1 w-full">
                 <!-- العنوان الرئيسي: الفرع -->
-                <div class="font-bold text-xl text-green-400 mb-3 border-b border-gray-700 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div class="flex items-start gap-2">
+                <div class="font-bold text-xl text-green-400 mb-4 border-b border-gray-700 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div class="flex items-start gap-2 leading-relaxed">
                         <i class="fas fa-map-marker-alt mt-1"></i> 
                         <span class="break-words">${escapeHtml(order.branch || 'فرع غير محدد')}</span>
                     </div>
-                    <span class="text-xs bg-blue-900/50 text-blue-300 px-3 py-1.5 rounded-full w-max shadow">
+                    <span class="text-sm bg-blue-900/50 text-blue-300 px-4 py-2 rounded-lg w-max shadow border border-blue-800 font-bold">
                         <i class="fas fa-user mr-1"></i> المندوب: ${escapeHtml(repName)}
                     </span>
                 </div>
                 
                 <!-- تفاصيل المنتج -->
-                <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                    <div class="font-bold text-yellow-400 mb-2 text-lg">
-                        <i class="fas fa-box text-sm mr-1"></i> ${escapeHtml(order.productName)}
+                <div class="bg-gray-900/80 p-4 rounded-xl border border-gray-700 shadow-inner">
+                    <div class="font-bold text-yellow-400 mb-3 text-lg flex items-center gap-2">
+                        <i class="fas fa-box text-gray-400"></i> ${escapeHtml(order.productName)}
                     </div>
-                    <div class="flex flex-wrap gap-4 text-sm text-gray-300">
-                        <span dir="ltr" class="bg-gray-800 px-2 py-1 rounded border border-gray-600"><i class="fas fa-barcode text-gray-500 mr-1"></i> ${escapeHtml(order.barcode)}</span>
-                        <span class="bg-gray-800 px-2 py-1 rounded border border-gray-600"><i class="fas fa-calendar-alt text-gray-500 mr-1"></i> ${escapeHtml(orderDate)}</span>
-                        ${order.quantity > 1 ? `<span class="bg-blue-900/30 text-blue-300 px-2 py-1 rounded border border-blue-800 font-bold">الكمية: ${escapeHtml(order.quantity)}</span>` : ''}
+                    <div class="flex flex-wrap gap-3 text-sm text-gray-300">
+                        <span dir="ltr" class="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-600 font-mono shadow-sm">
+                            <i class="fas fa-barcode text-gray-500 mr-2"></i>${escapeHtml(order.barcode)}
+                        </span>
+                        <span class="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-600 shadow-sm font-bold">
+                            <i class="fas fa-calendar-alt text-gray-500 mr-2"></i>تاريخ المشكلة: ${escapeHtml(orderDate)}
+                        </span>
+                        ${order.quantity > 1 ? `<span class="bg-blue-900/30 text-blue-300 px-3 py-1.5 rounded-lg border border-blue-800 font-bold shadow-sm">الكمية: ${escapeHtml(order.quantity)}</span>` : ''}
                     </div>
                 </div>
                 
                 <!-- السبب -->
-                <div class="mt-3 text-sm text-orange-400 font-bold bg-orange-900/20 p-2 rounded border border-orange-900/50">
-                    <i class="fas fa-exclamation-triangle mr-1"></i> سبب التعليق: ${escapeHtml(order.notes)}
+                <div class="mt-4 text-base text-orange-400 font-bold bg-orange-900/20 p-3 rounded-lg border border-orange-900/50 shadow-inner">
+                    <i class="fas fa-exclamation-triangle mr-2 text-lg"></i> سبب التعليق: ${escapeHtml(order.notes)}
                 </div>
             </div>
             
             <!-- أدوات التحكم -->
-            <div class="flex flex-col gap-2 w-full md:w-48 mt-2 md:mt-0 shrink-0">
-                <select data-order-status="${escapeHtml(order.id)}" class="bg-gray-900 border ${cardBorder} text-white font-bold rounded-lg p-2.5 outline-none focus:border-blue-500 w-full shadow cursor-pointer">
-                    <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>قيد التعليق</option>
-                    <option value="Resolved" ${status === 'Resolved' ? 'selected' : ''}>تم الحل والتسوية</option>
-                </select>
+            <div class="flex flex-col gap-3 w-full md:w-56 mt-2 md:mt-0 shrink-0">
+                <div class="bg-gray-900/50 p-3 rounded-xl border border-gray-700 shadow-inner">
+                    <label class="block text-xs font-bold text-gray-400 mb-2 text-center">حالة الأوردر</label>
+                    <select data-order-status="${escapeHtml(order.id)}" class="bg-gray-800 border ${cardBorder} text-white font-bold rounded-lg p-3 outline-none focus:border-blue-500 w-full shadow cursor-pointer text-sm">
+                        <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>قيد التعليق والمتابعة</option>
+                        <option value="Resolved" ${status === 'Resolved' ? 'selected' : ''}>تم الحل / تسوية</option>
+                    </select>
+                </div>
                 
                 <div class="flex gap-2 w-full mt-1">
-                    <button onclick="editPendingOrder('${escapeHtml(order.id)}', '${escapeHtml(order.notes)}')" class="bg-blue-900/50 hover:bg-blue-600 text-blue-300 hover:text-white px-3 py-2 rounded-lg transition text-xs font-bold flex-1 shadow border border-blue-800">
+                    <button onclick="editPendingOrder('${escapeHtml(order.id)}', '${escapeHtml(order.notes)}')" class="bg-blue-900/50 hover:bg-blue-600 text-blue-300 hover:text-white px-3 py-2.5 rounded-lg transition text-sm font-bold flex-1 shadow border border-blue-800">
                         <i class="fas fa-edit mb-1 block text-lg"></i> تعديل
                     </button>
-                    <button onclick="deletePendingOrder('${escapeHtml(order.id)}')" class="bg-red-900/50 hover:bg-red-600 text-red-300 hover:text-white px-3 py-2 rounded-lg transition text-xs font-bold flex-1 shadow border border-red-800">
+                    <button onclick="deletePendingOrder('${escapeHtml(order.id)}')" class="bg-red-900/50 hover:bg-red-600 text-red-300 hover:text-white px-3 py-2.5 rounded-lg transition text-sm font-bold flex-1 shadow border border-red-800">
                         <i class="fas fa-trash-alt mb-1 block text-lg"></i> حذف
                     </button>
                 </div>
@@ -1369,9 +1513,9 @@ function renderPendingOrders() {
                     status: e.target.value, 
                     updatedAt: serverTimestamp() 
                 });
-                showToast("تم تحديث الحالة بنجاح", "success");
+                showToast("تم تحديث حالة الأوردر بنجاح", "success");
             } catch(err) {
-                showToast("تعذر التحديث");
+                showToast("تعذر تحديث الحالة");
             }
         });
         
@@ -1379,13 +1523,18 @@ function renderPendingOrders() {
     });
 }
 
-// حذف المعلق
 window.deletePendingOrder = (orderId) => {
     window.UI.openModal(
-        "تأكيد الحذف", 
-        "<p class='text-red-400 font-bold'>هل أنت متأكد من حذف هذا الأوردر المعلق نهائياً من السجلات؟</p>", 
-        "حذف نهائي", 
-        "bg-red-600 hover:bg-red-700", 
+        "تأكيد الحذف النهائي", 
+        `
+        <div class="bg-red-900/20 p-4 rounded-lg border border-red-900/50 text-center">
+            <i class="fas fa-exclamation-circle text-5xl text-red-500 mb-4 block"></i>
+            <p class='text-red-400 font-bold text-lg mb-2'>تحذير: سيتم حذف هذا السجل نهائياً!</p>
+            <p class="text-gray-300 text-sm">هل أنت متأكد من حذف هذا الأوردر المعلق من قاعدة البيانات؟ لا يمكن التراجع عن هذه الخطوة.</p>
+        </div>
+        `, 
+        "نعم، احذف السجل", 
+        "bg-red-600 hover:bg-red-700 border-red-500", 
         async () => {
             try {
                 await deleteDoc(doc(db, "orders", orderId));
@@ -1397,21 +1546,20 @@ window.deletePendingOrder = (orderId) => {
     );
 };
 
-// تعديل المعلق
 window.editPendingOrder = (orderId, currentNotes) => {
     const html = `
-        <label class="block text-sm text-gray-400 mb-2">سبب التعليق الجديد:</label>
-        <input type="text" id="editPendingNotes" value="${currentNotes}" class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white outline-none focus:border-blue-500">
+        <label class="block text-sm font-bold text-gray-300 mb-2">تعديل سبب التعليق أو المشكلة:</label>
+        <textarea id="editPendingNotes" rows="3" class="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 shadow-inner">${currentNotes}</textarea>
     `;
     
     window.UI.openModal(
         "تعديل تفاصيل التعليق", 
         html, 
         "حفظ التعديل", 
-        "bg-blue-600 hover:bg-blue-700", 
+        "bg-blue-600 hover:bg-blue-700 border-blue-500", 
         async () => {
             const newNotes = getElement("editPendingNotes").value.trim();
-            if(!newNotes) return showToast("يجب كتابة السبب");
+            if(!newNotes) return showToast("يجب كتابة السبب بوضوح");
             
             try {
                 await updateDoc(doc(db, "orders", orderId), { 
@@ -1420,7 +1568,7 @@ window.editPendingOrder = (orderId, currentNotes) => {
                 });
                 showToast("تم تعديل السبب بنجاح", "success");
             } catch(e) {
-                showToast("تعذر التعديل");
+                showToast("تعذر حفظ التعديل");
             }
         }
     );
@@ -1428,7 +1576,7 @@ window.editPendingOrder = (orderId, currentNotes) => {
 
 
 // ==========================================
-// 7. الإشعارات والتحكم
+// 7. الإشعارات والتنبيهات
 // ==========================================
 window.sendNotification = async () => {
     const type = getElement("notificationTargetType").value;
@@ -1441,11 +1589,11 @@ window.sendNotification = async () => {
     const message = getElement("globalNotificationText").value.trim();
     
     if (!message || (type !== 'all' && !target)) {
-        return showToast("برجاء إكمال البيانات وتحديد المستهدف");
+        return showToast("برجاء إكمال البيانات وكتابة الرسالة");
     }
     
     const btn = document.querySelector('[onclick="sendNotification()"]'); 
-    setBusy(btn, true, "جاري الإرسال...");
+    setBusy(btn, true, "جاري إرسال الإشعار...");
     
     try {
         await addDoc(notificationsRef, { 
@@ -1467,19 +1615,19 @@ window.sendNotification = async () => {
         showToast("تم إرسال الإشعار بنجاح", "success");
     } catch(e) { 
         console.error(e);
-        showToast("خطأ في الإرسال"); 
+        showToast("خطأ في الاتصال بالخادم أثناء الإرسال"); 
     } finally { 
         setBusy(btn, false); 
     }
 };
 
-// خروج الجميع
+// خروج إجباري
 window.forceLogoutAll = async () => { 
     try { 
         await setDoc(systemRef, { forceLogoutTrigger: Date.now() }, { merge: true }); 
-        showToast("تم تنفيذ أمر الخروج بنجاح", "success"); 
+        showToast("تم إرسال أمر الخروج الإجباري لجميع الأجهزة", "success"); 
     } catch(e) { 
-        showToast("حدث خطأ"); 
+        showToast("تعذر إرسال أمر الخروج"); 
     } 
 };
 
@@ -1487,7 +1635,7 @@ window.forceLogoutAll = async () => {
 getElement("adminOrderSearch")?.addEventListener("input", renderPendingOrders);
 getElement("adminOrderFilter")?.addEventListener("change", renderPendingOrders);
 
-// إظهار وإخفاء الفورم
+// إظهار وإخفاء فورم المندوب
 getElement("toggleEmployeeFormBtn")?.addEventListener("click", () => {
     getElement("employeeFormPanel")?.classList.toggle("hidden");
 });
